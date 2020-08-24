@@ -20,7 +20,10 @@ class Measure(BaseDataIO):
 
     @staticmethod
     def most_common(lst):
-        return max(set(lst), key=lst.count)
+        if len(lst) == 0:
+            return 0
+        else:
+            return max(set(lst), key=lst.count)
 
     def get_private_attribute(self):
         pass

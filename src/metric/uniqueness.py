@@ -27,6 +27,7 @@ class Uniqueness(Measure):
         for k, v in sorted_ulst:
             if v < 55:
                 unique_attr.append(k)
+            self.logging.info(f"The average group size: {k} -> {v}")
         self.logging.info(f"unique_attr {unique_attr}")
 
     def get_private_attribute_v2(self):
@@ -49,7 +50,6 @@ class Uniqueness(Measure):
         threshold = 0.2  # (1 in 20 records)
         for k, v in sorted_alst:
             if v > threshold:
-                # print(k,v)
                 imbalance_attr.append(k)
         imbalance_attr
 
@@ -74,6 +74,7 @@ class Uniqueness(Measure):
         second_attr = []
         count = 0
         for k, v in sorted_clst:
+            self.logging.info(f"sorted_clst: {k} -> {v}")
             if count < 5:
                 second_attr.append(k)
                 count = count + 1

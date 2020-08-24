@@ -11,6 +11,8 @@ class Similarity(Measure):
         super(Similarity, self).__init__(ctx)
         self.attrition = self.preprocess()
         self.full_cols = self.attrition.columns.values
+        # self.YearsWithCurrManager = 'YearsWithCurrManager'
+        self.YearsWithCurrManager = 'years_with_current_manager'
 
     @staticmethod
     def pdistcompute(attrition, cols):
@@ -32,9 +34,9 @@ class Similarity(Measure):
         fset_low = []
         for i in range(len(full_cols)):
             cols = full_cols[i]
-            cols = [cols] + ['YearsWithCurrManager']
+            cols = [cols] + [self.YearsWithCurrManager]
             count = self.pdistcompute(attrition, cols)
-            if (full_cols[i] != 'YearsWithCurrManager') & (np.sum(count) != 0):
+            if (full_cols[i] != self.YearsWithCurrManager) & (np.sum(count) != 0):
                 # YearsWithCurrManager is used as reference and ignored for analysis
                 # count = 0 implies all same values for col
                 # print(full_cols[i] + str(":\t") + str(count[0]/sum(count)))
