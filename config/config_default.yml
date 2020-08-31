@@ -1,0 +1,12 @@
+preprocess:
+  work_model: preprocess
+
+
+train:
+  work_model: train
+  data: examples/learning_fix/data/small/small
+
+
+
+predict:
+  work_model: translate
