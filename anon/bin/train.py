@@ -10,7 +10,7 @@ def train(ctx):
     ArgumentParser.validate_train_opts(ctx.config)
     ArgumentParser.update_model_opts(ctx.config)
     ArgumentParser.validate_model_opts(ctx.config)
-    model = AnonModel()
+    model = AnonModel(ctx)
     model.run()
 
 

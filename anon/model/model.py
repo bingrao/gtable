@@ -3,25 +3,27 @@ import os
 import time
 import tensorflow as tf
 from anon.model.gan import GANModel
+from anon.inputter.inputter import build_dataset_iter
 
 
 class AnonModel:
-    def __init__(self):
+    def __init__(self, ctx):
+
+        self.config = ctx.config
+        self.logging = ctx.logger
+        self.context = ctx
+
         self.model = GANModel()
         self.checkpoint_dir = './training_checkpoints'
         self.checkpoint_prefix = os.path.join(self.checkpoint_dir, "ckpt")
         self.checkpoint = self.model.checkpoint
 
-        self.EPOCHS = 50
         self.noise_dim = 100
         self.num_examples_to_generate = 16
 
         # We will reuse this seed overtime (so it's easier)
         # to visualize progress in the animated GIF)
         self.seed = tf.random.normal([self.num_examples_to_generate, self.noise_dim])
-
-        self.BUFFER_SIZE = 60000
-        self.BATCH_SIZE = 256
 
     @staticmethod
     def generate_and_save_images(model, epoch, test_input):
@@ -60,16 +62,25 @@ class AnonModel:
         self.generate_and_save_images(self.model.generator, self.epochs, self.seed)
 
     def load_dataset(self):
+        return self.load_tabular_data()
+
+    def load_minist_dataset(self):
         (train_images, train_labels), (_, _) = tf.keras.datasets.mnist.load_data()
-        train_images = train_images.reshape(train_images.shape[0], 28, 28, 1).astype('float32')
+        buffer_size = train_images.shape[0]
+        train_images = train_images.reshape(buffer_size, 28, 28, 1).astype('float32')
         train_images = (train_images - 127.5) / 127.5  # Normalize the images to [-1, 1]
+
         # Batch and shuffle the data
-        train_dataset = tf.data.Dataset.from_tensor_slices(train_images).shuffle(self.BUFFER_SIZE).batch(self.BATCH_SIZE)
+        train_dataset = tf.data.Dataset.from_tensor_slices(train_images)\
+            .shuffle(buffer_size).batch(self.config.batch_size)
+
         return train_dataset
 
+    def load_tabular_data(self):
+        return build_dataset_iter(self.context, "train", self.config, True)
+
     def run(self):
-        train_dataset = self.load_dataset()
-        self.train(train_dataset, self.EPOCHS)
+        self.train(self.load_dataset(), self.config.epoch)
 
 
 if __name__ == "__main__":

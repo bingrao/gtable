@@ -1,10 +1,21 @@
 preprocess:
   work_model: preprocess
+  data_type: "csv"
+  sep: ","
+  train_input: data/Civilian/Civilian_textual.csv
+  valid_input: data/Civilian/Civilian_textual.csv
+  target: "suicide"
+  save_data: data/Civilian/Civilian
+
 
 
 train:
   work_model: train
-  data: examples/learning_fix/data/small/small
+  data:  data/Civilian/Civilian
+#  train_src: data/Civilian/Civilian_textual.csv
+#  train_tgt: examples/learning_fix/data/small/train-fixed.txt
+#  valid_src: examples/learning_fix/data/small/eval-buggy.txt
+#  valid_tgt: examples/learning_fix/data/small/eval-fixed.txt
 
 
 

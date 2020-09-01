@@ -32,18 +32,54 @@ def model_opts(parser):
 
 
 def preprocess_opts(parser):
-   pass
+    group = parser.add_argument_group('Data')
+    group.add('--data_type', '-data_type', default="text",
+              help="Type of the source input. "
+                   "Options are [text|img|csv|vec|code].")
+    group.add('--sep', '-sep', type=str, default=',')
+    group.add('--drop', '-drop', type=list, default=None)
+    group.add('--cat_names', '-cat_names', type=list, default=None)
+
+    group.add('--train_input', '-train_input', type=str, required=True, default=None,
+              help="Path(s) to the training source data")
+
+    group.add('--valid_input', '-valid_input', type=str, required=False, default=None,
+              help="Path to the validation source data")
+
+    group.add('-target', '--target', type=str, default=None,
+              help='Ticket <--> OpCarrierGroup; Civilian <--> suicide')
+
+    group.add('--save_data', '-save_data', type=str, required=False, default=None,
+              help="Output file for the prepared data")
+
+
 
 
 def train_opts(parser):
     """ Training and saving options """
 
     group = parser.add_argument_group('General')
-    group.add('--data', '-data', required=False,
-              help='Path prefix to the ".train.pt" and '
-                   '".valid.pt" file path from preprocess.py')
-    group.add('--epoch', '-epoch', type=int, default=0,
+
+    group.add('--data', '-data', required=True,
+              help='Path prefix to the ".train.src.pkl" and '
+                   '".valid.src.pkl" file path from preprocess.py')
+
+    group.add('--train_src', '-train_src', type=str, required=False, default=None,
+              help="Path(s) to the training source data")
+    group.add('--train_tgt', '-train_tgt', type=str, required=False, default=None,
+              help="Path(s) to the training target data")
+
+    group.add('--valid_src', '-valid_src', type=str, required=False, default=None,
+              help="Path to the validation source data")
+    group.add('--valid_tgt', '-valid_tgt', type=str, required=False, default=None,
+              help="Path to the validation target data")
+
+    group.add('--epoch', '-epoch', type=int, default=64,
               help='Deprecated epochs see train_steps')
+
+
+
+
 
     # learning rate
     group = parser.add_argument_group('Optimization- Rate')
@@ -99,7 +135,7 @@ def train_opts(parser):
 
     # Optimization options
     group = parser.add_argument_group('Optimization- Type')
-    group.add('--batch_size', '-batch_size', type=int, default=64,
+    group.add('--batch_size', '-batch_size', type=int, default=256,
               help='Maximum batch size for training')
     group.add('--batch_type', '-batch_type', default='sents',
               choices=["sents", "tokens"],
