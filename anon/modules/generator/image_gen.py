@@ -1,6 +1,6 @@
+from anon.modules.generator import Generator
 from tensorflow.keras import layers
 import tensorflow as tf
-from anon.generator.generator import Generator
 
 
 class ImageGen(Generator):

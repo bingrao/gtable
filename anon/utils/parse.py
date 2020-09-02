@@ -81,7 +81,7 @@ class ArgumentParser(cfargparse.ArgumentParser):
             config_file_parser_class=config_file_parser_class,
             formatter_class=formatter_class,
             **kwargs)
-        assert model in ["abstract", "preprocess", "train", "translate"], "Unsupported app type %s" % model
+        assert model in ["abstract", "preprocess", "train", "generation"], "Unsupported app type %s" % model
         self._config_file_parser.set_work_model(model)
 
     @classmethod

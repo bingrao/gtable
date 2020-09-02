@@ -1,5 +1,5 @@
+from modules.models import BaseModel
 import tensorflow as tf
-from utils.base_model import BaseModel
 
 
 class Generator(BaseModel):

@@ -95,4 +95,3 @@ def pickle_save(ctx, dataset, path):
 def pickle_load(ctx, path):
     ctx.logger.info(f'Loading dataset file: {path}')
     return pickle.load(open(path, 'rb'))
-

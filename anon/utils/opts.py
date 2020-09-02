@@ -12,6 +12,8 @@ def config_opts(parser):
                is_write_out_config_file_arg=True,
                help='config file save path')
 
+    parser.add('--app', '-app', type=str, choices=["image", "table"], default="image")
+
     parser.add('--work_model', '-work_model', type=str, default='preprocess', required=False,
                choices=['preprocess', 'train', 'predict'],
                help="Indicator that what kinds of task is working on right now")

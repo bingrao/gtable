@@ -1,11 +1,11 @@
 from tensorflow.keras import layers
-from anon.discriminator.discriminator import Discriminator
+from modules.classification import Classification
 import tensorflow as tf
 
 
-class ImageDisc(Discriminator):
+class TableClassify(Classification):
     def __init__(self, ctx):
-        super(Discriminator, self).__init__()
+        super(Classification, self).__init__()
         self.context = ctx
         self.logging = ctx.logger
         self.config = ctx.config
@@ -13,15 +13,18 @@ class ImageDisc(Discriminator):
     @staticmethod
     def build_model():
         model = tf.keras.Sequential()
-        model.add(layers.Conv2D(64, (5, 5), strides=(2, 2), padding='same',
-                                input_shape=[28, 28, 1]))
+
+        # h0
+        model.add(layers.Conv2D(64, (5, 5), strides=(2, 2), padding='same', input_shape=[28, 28, 1]))
         model.add(layers.LeakyReLU())
         model.add(layers.Dropout(0.3))
 
+        # h1
         model.add(layers.Conv2D(128, (5, 5), strides=(2, 2), padding='same'))
         model.add(layers.LeakyReLU())
         model.add(layers.Dropout(0.3))
 
+        # h3
         model.add(layers.Flatten())
         model.add(layers.Dense(1))
 

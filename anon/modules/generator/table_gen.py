@@ -1,5 +1,5 @@
+from anon.modules.generator import Generator
 from tensorflow.keras import layers
-from anon.generator.generator import Generator
 import tensorflow as tf
 
 
@@ -39,4 +39,3 @@ class TableGen(Generator):
         assert model.output_shape == (None, 28, 28, 1)
 
         return model
-

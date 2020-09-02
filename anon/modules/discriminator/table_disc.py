@@ -1,5 +1,5 @@
 from tensorflow.keras import layers
-from anon.discriminator.discriminator import Discriminator
+from anon.modules.discriminator import Discriminator
 import tensorflow as tf
 
 

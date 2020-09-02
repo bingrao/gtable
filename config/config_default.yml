@@ -1,5 +1,6 @@
 preprocess:
-  work_model: preprocess
+  app: "table"
+  work_model: "preprocess"
   data_type: "csv"
   sep: ","
   train_input: data/Civilian/Civilian_textual.csv
@@ -10,9 +11,11 @@ preprocess:
 
 
 train:
-  work_model: train
-  data:  data/Civilian/Civilian
+  app: "table"
+  work_model: "train"
+  data: data/Civilian/Civilian
 
 
-predict:
-  work_model: translate
+generation:
+  app: "table"
+  work_model: "generation"
