@@ -246,7 +246,7 @@ from sklearn.ensemble import RandomForestClassifier
 
 # Create a Gaussian Classifier
 clf = RandomForestClassifier(n_estimators=100)
-# Train the model using the training sets y_pred=clf.predict(X_test)
+# Train the app using the training sets y_pred=clf.predict(X_test)
 clf.fit(X_train, y_train)
 y_pred = clf.predict(X_test)
 # Import scikit-learn metrics module for accuracy calculation

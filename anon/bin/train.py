@@ -3,14 +3,15 @@
 import utils.opts as opts
 from anon.utils.parse import ArgumentParser
 from anon.utils.context import Context
-from anon.model.model import AnonModel
+from anon.app.tablegan import TableGAN
+from anon.app.imagegan import ImageGAN
 
 
 def train(ctx):
     ArgumentParser.validate_train_opts(ctx.config)
     ArgumentParser.update_model_opts(ctx.config)
     ArgumentParser.validate_model_opts(ctx.config)
-    model = AnonModel(ctx)
+    model = TableGAN(ctx)
     model.run()
 
 

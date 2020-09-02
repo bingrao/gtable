@@ -2,7 +2,7 @@ import tensorflow as tf
 from utils.base_model import BaseModel
 
 
-class Discriminator(BaseModel):
+class Classification(BaseModel):
     def __init__(self):
         super(BaseModel, self).__init__()
 

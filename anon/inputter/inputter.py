@@ -1,14 +1,26 @@
-import glob
-import os
-import codecs
-import math
 import pandas as pd
-from collections import Counter, defaultdict
-from itertools import chain, cycle
 from sklearn import preprocessing
 import numpy as np
-import tensorflow as tf
 import pickle
+import tensorflow as tf
+import matplotlib.pyplot as plt
+
+
+def generate_and_save_images(model, epoch, test_input):
+    # Notice `training` is set to False.
+    # This is so all layers run in inference mode (batchnorm).
+    predictions = model(test_input, training=False)
+
+    # fig = plt.figure(figsize=(4, 4))
+
+    for i in range(predictions.shape[0]):
+        plt.subplot(4, 4, i + 1)
+        plt.imshow(predictions[i, :, :, 0] * 127.5 + 127.5, cmap='gray')
+        plt.axis('off')
+
+    plt.savefig('image_at_epoch_{:04d}.png'.format(epoch))
+    plt.show()
+
 
 def padding_duplicating(data, row_size):
     arr_data = np.array(data.values.tolist())
@@ -62,9 +74,9 @@ def build_dataset_iter(ctx, corpus_type, opt, is_train=True):
     # Normalizing Initial Data
     src_df = pd.DataFrame(min_max_scaler.fit_transform(src_df))  # (nums_records, nums_attrs)
 
-    padded_src_df = padding_duplicating(src_df, dim * dim)   # (nums_records, dim * dim)
+    padded_src_df = padding_duplicating(src_df, dim * dim)  # (nums_records, dim * dim)
 
-    features = reshape(padded_src_df, dim)   # (nums_records, dim, dim)
+    features = reshape(padded_src_df, dim)  # (nums_records, dim, dim)
 
     labels = pickle_load(ctx, train_tgt).values
 
@@ -83,3 +95,4 @@ def pickle_save(ctx, dataset, path):
 def pickle_load(ctx, path):
     ctx.logger.info(f'Loading dataset file: {path}')
     return pickle.load(open(path, 'rb'))
+
