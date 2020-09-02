@@ -28,7 +28,7 @@ def config_opts(parser):
 
 
 def model_opts(parser):
-   pass
+    pass
 
 
 def preprocess_opts(parser):
@@ -53,8 +53,6 @@ def preprocess_opts(parser):
               help="Output file for the prepared data")
 
 
-
-
 def train_opts(parser):
     """ Training and saving options """
 
@@ -64,22 +62,8 @@ def train_opts(parser):
               help='Path prefix to the ".train.src.pkl" and '
                    '".valid.src.pkl" file path from preprocess.py')
 
-    group.add('--train_src', '-train_src', type=str, required=False, default=None,
-              help="Path(s) to the training source data")
-    group.add('--train_tgt', '-train_tgt', type=str, required=False, default=None,
-              help="Path(s) to the training target data")
-
-    group.add('--valid_src', '-valid_src', type=str, required=False, default=None,
-              help="Path to the validation source data")
-    group.add('--valid_tgt', '-valid_tgt', type=str, required=False, default=None,
-              help="Path to the validation target data")
-
     group.add('--epoch', '-epoch', type=int, default=64,
               help='Deprecated epochs see train_steps')
-
-
-
-
 
     # learning rate
     group = parser.add_argument_group('Optimization- Rate')
@@ -199,7 +183,7 @@ def train_opts(parser):
 
 
 def translate_opts(parser):
-   pass
+    pass
 
 
 class StoreLoggingLevelAction(configargparse.Action):

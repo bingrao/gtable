@@ -13,7 +13,7 @@ class AnonModel:
         self.logging = ctx.logger
         self.context = ctx
 
-        self.model = GANModel()
+        self.model = GANModel(ctx)
         self.checkpoint_dir = './training_checkpoints'
         self.checkpoint_prefix = os.path.join(self.checkpoint_dir, "ckpt")
         self.checkpoint = self.model.checkpoint
@@ -31,7 +31,7 @@ class AnonModel:
         # This is so all layers run in inference mode (batchnorm).
         predictions = model(test_input, training=False)
 
-        fig = plt.figure(figsize=(4, 4))
+        # fig = plt.figure(figsize=(4, 4))
 
         for i in range(predictions.shape[0]):
             plt.subplot(4, 4, i + 1)
@@ -42,6 +42,9 @@ class AnonModel:
         plt.show()
 
     def train(self, dataset, epochs):
+        self.train_tablegan(dataset, epochs)
+
+    def train_single(self, dataset, epochs):
         for epoch in range(epochs):
             start = time.time()
 
@@ -59,7 +62,19 @@ class AnonModel:
             print('Time for epoch {} is {} sec'.format(epoch + 1, time.time() - start))
 
         # Generate after the final epoch
-        self.generate_and_save_images(self.model.generator, self.epochs, self.seed)
+        self.generate_and_save_images(self.model.generator, epochs, self.seed)
+
+    def train_tablegan(self, dataset, epochs):
+        for epoch in range(epochs):
+            self.model.gen_loss.reset_states()
+            self.model.disc_loss.reset_states()
+            start = time.time()
+
+            for image_batch in dataset:
+                self.model.train_step_tablegan(image_batch)
+
+            self.logging.info(f'Time for epoch {epoch + 1} is {time.time() - start} sec, '
+                              f'Generator Loss: {self.model.gen_loss.result()}, Discriminator Loss: {self.model.disc_loss.result()}')
 
     def load_dataset(self):
         return self.load_tabular_data()
@@ -81,8 +96,3 @@ class AnonModel:
 
     def run(self):
         self.train(self.load_dataset(), self.config.epoch)
-
-
-if __name__ == "__main__":
-    model = AnonModel()
-    model.run()

@@ -28,9 +28,7 @@ def padding_duplicating(data, row_size):
 
 
 def reshape(data, dim):
-    data = data.reshape(data.shape[0], dim, -1)
-
-    return data
+    return data.reshape(data.shape[0], dim, -1, 1).astype('float32')
 
 
 def build_dataset_iter(ctx, corpus_type, opt, is_train=True):
@@ -55,7 +53,7 @@ def build_dataset_iter(ctx, corpus_type, opt, is_train=True):
 
     batch_size = opt.batch_size if is_train else opt.valid_batch_size
 
-    dim = 7
+    dim = 28
     src_df = pickle_load(ctx, train_src)  # (nums_records, nums_attrs)
     nums_records, attrib_num = src_df.shape
 

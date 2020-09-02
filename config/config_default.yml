@@ -12,11 +12,6 @@ preprocess:
 train:
   work_model: train
   data:  data/Civilian/Civilian
-#  train_src: data/Civilian/Civilian_textual.csv
-#  train_tgt: examples/learning_fix/data/small/train-fixed.txt
-#  valid_src: examples/learning_fix/data/small/eval-buggy.txt
-#  valid_tgt: examples/learning_fix/data/small/eval-fixed.txt
-
 
 
 predict:

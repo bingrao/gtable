@@ -3,7 +3,7 @@ from tensorflow.keras import layers
 import tensorflow as tf
 
 
-class Discriminator(Model):
+class Classification(Model):
     def __init__(self, ctx):
         super(Model, self).__init__()
         self.context = ctx
