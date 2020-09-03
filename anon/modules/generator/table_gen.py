@@ -5,7 +5,7 @@ import tensorflow as tf
 
 class TableGen(Generator):
     def __init__(self, ctx):
-        super(Generator, self).__init__()
+        super(Generator, self).__init__(ctx.config)
         self.context = ctx
         self.logging = ctx.logger
         self.config = ctx.config

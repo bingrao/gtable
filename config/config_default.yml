@@ -18,4 +18,6 @@ train:
 
 generation:
   app: "table"
+  data: data/Civilian/Civilian
+  project_dir: "/home/forcebot/project/privacy-analytics"
   work_model: "generation"

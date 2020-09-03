@@ -1,4 +1,4 @@
-from modules.models import BaseModel
+from modules.base import BaseModel
 import tensorflow as tf
 
 

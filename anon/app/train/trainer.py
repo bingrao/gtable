@@ -16,8 +16,7 @@ class Trainer:
         self.generator_optimizer = self.generator.optimizer
         self.discriminator_optimizer = self.discriminator.optimizer
 
-        self.checkpoint_dir = './training_checkpoints'
-        self.checkpoint_prefix = os.path.join(self.checkpoint_dir, "ckpt")
+        self.checkpoint_prefix = os.path.join(self.context.checkpoint_dir, "ckpt")
         self.checkpoint = tf.train.Checkpoint(generator_optimizer=self.generator_optimizer,
                                               discriminator_optimizer=self.discriminator_optimizer,
                                               generator=self.generator,

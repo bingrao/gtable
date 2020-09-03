@@ -22,7 +22,6 @@ def create_dir(dir_path):
 
 class Context:
     def __init__(self, config):
-
         # A dictionary of Config Parameters
         self.config = config
 
@@ -36,6 +35,8 @@ class Context:
 
         # logger interface
         self.logger = init_logger("log", self.project_log)
+
+        self.checkpoint_dir = os.path.join(self.config.project_dir, self.config.checkpoint_dir, self.config.app)
 
         init_rng(seed=0)
         warnings.filterwarnings('ignore')

@@ -6,7 +6,6 @@ class App:
         self.logging = ctx.logger
         self.config = ctx.config
         self.workModel = self.config.work_model
-        self.app = self.build_app()
 
     def preprocess(self):
         """
@@ -25,7 +24,7 @@ class App:
     def validation(self):
         raise NotImplementedError
 
-    def postprocess(self):
+    def generation(self):
         """
         Using trained model to generate anonmymous data
         :return:
@@ -43,11 +42,8 @@ class App:
             self.train()
 
         if self.workModel == "generation":
-            self.postprocess()
+            self.generation()
 
     @classmethod
     def from_context(cls, ctx):
         return cls(ctx)
-
-    def build_app(self):
-        raise NotImplementedError

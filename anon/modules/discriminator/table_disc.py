@@ -5,10 +5,11 @@ import tensorflow as tf
 
 class TableDisc(Discriminator):
     def __init__(self, ctx):
-        super(Discriminator, self).__init__()
+        super(Discriminator, self).__init__(ctx.config)
         self.context = ctx
         self.logging = ctx.logger
         self.config = ctx.config
+
 
     @staticmethod
     def build_model():

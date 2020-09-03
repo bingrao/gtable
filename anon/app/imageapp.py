@@ -10,7 +10,6 @@ import time
 class ImageGAN(App):
     def __init__(self, ctx):
         super(ImageGAN, self).__init__(ctx)
-        self.trainer = Trainer(ctx, ImageGen(ctx), ImageDisc(ctx))
 
     def preprocess(self):
         """
@@ -24,35 +23,36 @@ class ImageGAN(App):
         Traning task and save checkpoint of model for future generation task
         :return:
         """
+        trainer = Trainer(self.context, ImageGen(self.context), ImageDisc(self.context))
         epochs = self.config.epoch
         dataset = self.load_dataset()
 
         for epoch in range(epochs):
-            self.trainer.metrics_reset()
+            trainer.metrics_reset()
             start = time.time()
 
             for image_batch in dataset:
-                self.trainer.train_step(image_batch)
+                trainer.train_step(image_batch)
 
             # Produce images for the GIF as we go
             # display.clear_output(wait=True)
-            generate_and_save_images(self.trainer.generator, epoch + 1, self.trainer.seed)
+            generate_and_save_images(trainer.generator, epoch + 1, trainer.seed)
 
             # Save the model every 15 epochs
-            if (epoch + 1) % 15 == 0:
-                self.trainer.checkpoint.save(file_prefix=self.trainer.checkpoint_prefix)
+            if (epoch + 1) % 15 == 1:
+                trainer.checkpoint.save(file_prefix=trainer.checkpoint_prefix(str(epoch)))
 
             self.logging.info(f'Time for epoch {epoch + 1} is {time.time() - start} sec, '
-                              f'Generator Loss: {self.trainer.generator.train_loss_metrics.result()}, '
-                              f'Discriminator Loss: {self.trainer.discriminator.train_loss_metrics.result()}')
+                              f'Generator Loss: {trainer.generator.train_loss_metrics.result()}, '
+                              f'Discriminator Loss: {trainer.discriminator.train_loss_metrics.result()}')
 
         # Generate after the final epoch
-        generate_and_save_images(self.trainer.generator, epochs, self.trainer.seed)
+        generate_and_save_images(trainer.generator, epochs, trainer.seed)
 
     def validation(self):
         pass
 
-    def postprocess(self):
+    def generation(self):
         """
         Using trained model to generate anonmymous data
         :return:

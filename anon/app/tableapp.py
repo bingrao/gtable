@@ -3,6 +3,7 @@ from anon.modules.discriminator import TableDisc
 from anon.modules.generator import TableGen
 from anon.app.train.trainer import Trainer
 from anon.app.preprocess import PreProcessor
+from anon.app.generation import DataGenerator
 from anon.app.app import App
 import time
 
@@ -34,6 +35,10 @@ class TableGAN(App):
             for features, labels in dataset:
                 trainer.train_step(features)
 
+            # Save the model every 15 epochs
+            if (epoch + 1) % self.config.save_checkpoint_steps == 1:
+                trainer.checkpoint.save(file_prefix=trainer.checkpoint_prefix)
+
             self.logging.info(f"Time for epoch {epoch + 1} is {time.time() - start} sec, "
                               f"Generator Loss: {trainer.generator.train_loss_metrics.result()}, "
                               f"Discriminator Loss: {trainer.discriminator.train_loss_metrics.result()}")
@@ -41,12 +46,13 @@ class TableGAN(App):
     def validation(self):
         raise NotImplementedError
 
-    def postprocess(self):
+    def generation(self):
         """
         Using trained model to generate anonmymous data
         :return:
         """
-        raise NotImplementedError
+        generation = DataGenerator(self.context, TableGen(self.context), TableDisc(self.context))
+        generation.generation()
 
     def load_dataset(self):
         return build_dataset_iter(self.context, "train", self.config, True)

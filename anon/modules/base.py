@@ -3,10 +3,14 @@ import tensorflow as tf
 
 
 class BaseModel(Model):
-    def __init__(self):
+    def __init__(self, opt=None):
         super(Model, self).__init__()
         self.model = self.build_model()
-        self.optimizer = tf.keras.optimizers.Adam(1e-4)
+
+        self.optimizer = tf.keras.optimizers.Adam(learning_rate=opt.learning_rate,
+                                                  beta_1=opt.adam_beta1,
+                                                  beta_2=opt.adam_beta2)
+
         self.cross_entropy = tf.keras.losses.BinaryCrossentropy(from_logits=True)
         self.train_loss_metrics = tf.keras.metrics.Mean(name='loss')
         self.train_accuracy_metrics = tf.keras.metrics.SparseCategoricalAccuracy(name='accuracy')
