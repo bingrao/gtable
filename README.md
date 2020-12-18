@@ -1,63 +1,149 @@
+<p align="left">
+  <a href="https://dai.lids.mit.edu">
+    <img width=15% src="https://dai.lids.mit.edu/wp-content/uploads/2018/06/Logo_DAI_highres.png" alt="DAI-Lab" />
+  </a>
+  <i>An Open Source Project from the <a href="https://dai.lids.mit.edu">Data to AI Lab, at MIT</a></i>
+</p>
 
-Application with Internal Packages
-===
-
-In larger applications, you may have one or more internal packages that are either tied together with a main runner script or that provide specific functionality to a larger library you are packaging.
-
-```
-python-project-template
-├── LICENSE
-├── Makefile
-├── README.md
-├── bin
-├── data
-├── docs
-│   ├── Makefile
-│   ├── conf.py
-│   ├── index.rst
-│   └── make.bat
-├── requirements.txt
-├── setup.py
-├── src
-│   ├── __init__.py
-│   ├── hello
-│   │   ├── __init__.py
-│   │   ├── hello.py
-│   │   └── helpers.py
-│   ├── runner.py
-│   └── world
-│       ├── __init__.py
-│       ├── helpers.py
-│       └── world.py
-└── tests
-    ├── __init__.py
-    ├── context.py
-    ├── test_advanced.py
-    └── test_basic.py
-```
-
-* **bin/**  : This directory holds any executable files. The most important point to remember is that your executable shouldn’t have a lot of code, just an import and a call to a main function in your runner script. If you are using pure Python or don’t have any executable files, you can leave out this directory.
-* **data/** : Having this directory is helpful for testing. It’s a central location for any files that your application will ingest or produce. Depending on how you deploy your application, you can keep “production-level” inputs and outputs pointed to this directory, or only use it for internal testing.
-* **docs/** : With a more advanced application, you’ll want to maintain good documentation of all its parts. I like to put any documentation for internal modules here, which is why you see separate documents for the hello and world packages. If you use docstrings in your internal modules (and you should!), your whole-module documentation should at the very least give a holistic view of the purpose and function of the module.
-* **src/**  : The directory contains source code, but now there are subdirectories. As you add more complexity, you’ll want to use a “divide and conquer” tactic and split out parts of your application logic into more manageable chunks. Remember that the directory name refers to the overall package name, and so the subdirectory names (hello/ and world/) should reflect their package names.
-* **test/** : Here, you can put all your tests—unit tests, execution tests, integration tests, and so on. Feel free to structure this directory in the most convenient way for your testing strategies, import strategies, and more.
-* **LICENSE** : The license for this project
-* **Makefile** : A makefile to compile this project
-* **requirements.txt** : A list of required python packages
-* **setup.py** : A setup file for python projects
-* **README.md** : A readme file
+[![Development Status](https://img.shields.io/badge/Development%20Status-2%20--%20Pre--Alpha-yellow)](https://pypi.org/search/?c=Development+Status+%3A%3A+2+-+Pre-Alpha)
+[![PyPI Shield](https://img.shields.io/pypi/v/ctgan.svg)](https://pypi.python.org/pypi/ctgan)
+[![Travis CI Shield](https://travis-ci.com/sdv-dev/CTGAN.svg?branch=master)](https://travis-ci.com/sdv-dev/CTGAN)
+[![Downloads](https://pepy.tech/badge/ctgan)](https://pepy.tech/project/ctgan)
+[![Coverage Status](https://codecov.io/gh/sdv-dev/CTGAN/branch/master/graph/badge.svg)](https://codecov.io/gh/sdv-dev/CTGAN)
 
 
-How to install this python package
-===
+<img align="center" width=30% src="docs/images/ctgan.png">
 
-How to execute this project in Unix/Linux Environment
-===
-```batch
-python3 src/runner.py
+* Website: https://sdv.dev
+* Documentation: https://sdv.dev/SDV
+* Repository: https://github.com/sdv-dev/CTGAN
+* License: [MIT](https://github.com/sdv-dev/CTGAN/blob/master/LICENSE)
+* Development Status: [Pre-Alpha](https://pypi.org/search/?c=Development+Status+%3A%3A+2+-+Pre-Alpha)
+
+## Overview
+
+CTGAN is a collection of Deep Learning based Synthetic Data Generators for single table data, which are able to learn from real data and generate synthetic clones with high fidelity.
+
+Currently, this library implements the **CTGAN** and **TVAE** models proposed in the [Modeling Tabular data using Conditional GAN](https://arxiv.org/abs/1907.00503) paper. For more information about these models, please check out the respective user guides:
+* [CTGAN User Guide](https://sdv.dev/SDV/user_guides/single_table/ctgan.html).
+* [TVAE User Guide](https://sdv.dev/SDV/user_guides/single_table/tvae.html).
+
+# Install
+
+## Requirements
+
+**CTGAN** has been developed and tested on [Python 3.6, 3.7 and 3.8](https://www.python.org/downloads/)
+
+## Install from PyPI
+
+The recommended way to installing **CTGAN** is using [pip](https://pip.pypa.io/en/stable/):
+
+```bash
+pip install ctgan
 ```
 
+This will pull and install the latest stable release from [PyPI](https://pypi.org/).
 
-Reference
-===
-1. [Unresolved references inspection](https://intellij-support.jetbrains.com/hc/en-us/community/posts/115000646984--Solved-Warnings-import-local-package-Unresolved-references-inspection)
+## Install with conda
+
+**CTGAN** can also be installed using [conda](https://docs.conda.io/en/latest/):
+
+```bash
+conda install -c sdv-dev -c pytorch -c conda-forge ctgan
+```
+
+This will pull and install the latest stable release from [Anaconda](https://anaconda.org/).
+
+
+# Usage Example
+
+> :warning: **WARNING**: If you're just getting started with synthetic data, we recommend using the SDV library which provides user-friendly APIs for interacting with CTGAN. To learn more about using CTGAN through SDV, check out the user guide [here](https://sdv.dev/SDV/user_guides/single_table/ctgan.html).
+
+To get started with CTGAN, you should prepare your data as either a `numpy.ndarray` or a `pandas.DataFrame` object with two types of columns:
+
+* **Continuous Columns**: can contain any numerical value.
+* **Discrete Columns**: contain a finite number values, whether these are string values or not.
+
+In this example we load the [Adult Census Dataset](https://archive.ics.uci.edu/ml/datasets/adult) which is a built-in demo dataset. We then model it using the **CTGANSynthesizer** and generate a synthetic copy of it.
+
+
+```python3
+from ctgan import CTGANSynthesizer
+from ctgan import load_demo
+
+data = load_demo()
+
+# Names of the columns that are discrete
+discrete_columns = [
+    'workclass',
+    'education',
+    'marital-status',
+    'occupation',
+    'relationship',
+    'race',
+    'sex',
+    'native-country',
+    'income'
+]
+
+ctgan = CTGANSynthesizer(epochs=10)
+ctgan.fit(data, discrete_columns)
+
+# Synthetic copy
+samples = ctgan.sample(1000)
+```
+
+
+
+# Join our community
+
+
+1. Please have a look at the [Contributing Guide](https://sdv.dev/SDV/developer_guides/contributing.html) to see how you can contribute to the project.
+2. If you have any doubts, feature requests or detect an error, please [open an issue on github](https://github.com/sdv-dev/CTGAN/issues) or [join our Slack Workspace](https://sdv-space.slack.com/join/shared_invite/zt-gdsfcb5w-0QQpFMVoyB2Yd6SRiMplcw#/).
+3. Also, do not forget to check the [project documentation site](https://sdv.dev/SDV/)!
+
+
+# Citing TGAN
+
+If you use CTGAN, please cite the following work:
+
+- *Lei Xu, Maria Skoularidou, Alfredo Cuesta-Infante, Kalyan Veeramachaneni.* **Modeling Tabular data using Conditional GAN**. NeurIPS, 2019.
+
+```LaTeX
+@inproceedings{xu2019modeling,
+  title={Modeling Tabular data using Conditional GAN},
+  author={Xu, Lei and Skoularidou, Maria and Cuesta-Infante, Alfredo and Veeramachaneni, Kalyan},
+  booktitle={Advances in Neural Information Processing Systems},
+  year={2019}
+}
+```
+
+# Related Projects
+Please note that these libraries are external contributions and are not maintained nor supervised by
+the MIT DAI-Lab team.
+
+## R interface for CTGAN
+
+A wrapper around **CTGAN** has been implemented by Kevin Kuo @kevinykuo, bringing the functionalities
+of **CTGAN** to **R** users.
+
+More details can be found in the corresponding repository: https://github.com/kasaai/ctgan
+
+## CTGAN Server CLI
+
+A package to easily deploy **CTGAN** onto a remote server. This package is developed by Timothy Pillow @oregonpillow.
+
+More details can be found in the corresponding repository: https://github.com/oregonpillow/ctgan-server-cli
+
+
+# The Synthetic Data Vault
+
+<p>
+  <a href="https://sdv.dev">
+    <img width=30% src="https://github.com/sdv-dev/SDV/blob/master/docs/images/SDV-Logo-Color-Tagline.png?raw=true">
+  </a>
+  <p><i>This repository is part of <a href="https://sdv.dev">The Synthetic Data Vault Project</a></i></p>
+</p>
+
+* Website: https://sdv.dev
+* Documentation: https://sdv.dev/SDV
