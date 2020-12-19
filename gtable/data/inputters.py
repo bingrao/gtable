@@ -4,6 +4,20 @@ import numpy as np
 import pandas as pd
 
 
+def category_to_number(df, cat_names=[]):
+    metadata = {}
+    df_num = df.copy()
+
+    metadata['table_colums_name'] = {'y': [], 'label': df_num.columns}
+
+    # TRANSFORM TO SET TO PREVENT DOUBLE FACTORIZATION
+    for z in set(df_num.select_dtypes(include=['object']).columns.tolist() + cat_names):
+        y, label = pd.factorize(df[z])
+        metadata[z] = {'y': y, 'label': label}
+        df_num[z] = y
+    return df_num, metadata
+
+
 def read_csv(csv_filename, meta_filename=None, header=True, discrete=None):
 
     data = pd.read_csv(csv_filename, header='infer' if header else None)

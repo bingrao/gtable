@@ -1,4 +1,4 @@
-{% set name = 'ctgan' %}
+{% set name = 'gtable' %}
 {% set version = '0.3.1.dev0' %}
 
 package:
@@ -12,7 +12,7 @@ build:
   number: 0
   noarch: python
   entry_points:
-    - ctgan=ctgan.__main__:main
+    - gtable=gtable.__main__:main
   script: "{{ PYTHON }} -m pip install . -vv"
 
 requirements:
@@ -41,10 +41,10 @@ about:
   home: "https://github.com/sdv-dev/CTGAN"
   license: MIT
   license_family: MIT
-  license_file: 
+  license_file:
   summary: "Conditional GAN for Tabular Data"
-  doc_url: 
-  dev_url: 
+  doc_url:
+  dev_url:
 
 extra:
   recipe-maintainers:

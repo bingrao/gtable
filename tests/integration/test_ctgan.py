@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""Integration tests for ctgan.
+"""Integration tests for gtable.
 
 These tests only ensure that the software does not crash and that
 the API works as expected in terms of input and output data formats,
@@ -12,7 +12,7 @@ model are not checked.
 import numpy as np
 import pandas as pd
 
-from ctgan.synthesizers.ctgan import CTGANSynthesizer
+from gtable.app.ctgan import CTGANSynthesizer
 
 
 def test_ctgan_dataframe():

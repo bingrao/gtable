@@ -78,7 +78,7 @@ setup(
     description='Conditional GAN for Tabular Data',
     entry_points={
         'console_scripts': [
-            'ctgan=ctgan.__main__:main'
+            'gtable=gtable.__main__:main'
         ],
     },
     extras_require={
@@ -91,9 +91,9 @@ setup(
     long_description=readme + '\n\n' + history,
     long_description_content_type='text/markdown',
     include_package_data=True,
-    keywords='ctgan CTGAN',
-    name='ctgan',
-    packages=find_packages(include=['ctgan', 'ctgan.*']),
+    keywords='gtable CTGAN',
+    name='gtable',
+    packages=find_packages(include=['gtable', 'gtable.*']),
     python_requires='>=3.6,<3.9',
     setup_requires=setup_requires,
     test_suite='tests',

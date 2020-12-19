@@ -1,0 +1,41 @@
+generation:
+  app: "GTABLE"
+  run_type: "generation"
+  real_data: /home/forcebot/project/gtable/examples/adults/data/adult.csv
+  metadata: /home/forcebot/project/gtable/examples/adults/data/adult.json
+  save_data: data/Civilian/balance_Civilian-15000
+  save_checkpoints_steps: 1000
+  epoch: 150
+  cuda_visible_devices: 2
+  train: "VGAN"
+  g_penalty: 3.0
+  n_critic: 5
+  output: /home/forcebot/project/gtable/examples/adults/output/fake.csv
+
+
+
+evaluate:
+  app: "Unknot"
+  run_type: "evaluate"
+  real_data: data/Civilian/balance_Civilian_textual.csv
+  fake_data: data/Civilian/balance_Civilian-15000_fake_with_label.csv
+#  fake_data: data/Civilian/ctgan_civilians_15000_notebook_fake.csv
+#  fake_data: data/Civilian/tablegan_civilians_15000_notebook_fake.csv
+
+  features_col: [ 'age', 'gender', 'race', 'marital_status', 'education',
+              'type_of_work', 'salary', 'distance_from_home',
+              'years_with_current_manager' ]
+  target_col: 'suicide'
+
+  classify_tasks: ['xgboost', 'logistic_regression', 'random_forest', 'decision_tree', 'mlp']
+#  classify_tasks: ['xgboost']
+  classify_scores: [ 'F1_Score', 'Recall_Score', 'Precision_Score']
+
+#  regression_tasks: ['random_forest_regr', 'lasso', 'ridge', 'elastic_net']
+#  regression_scores: ['mse', 'mae', 'mape', 'rmse']
+
+#  visual: ['mean_std', 'cumsums', 'distributions', 'correlation', 'pca']
+#  visual: ['correlation']
+
+  continuous_statistics: ['min']
+#  discrete_statistics: ['min', 'max', 'mean', 'median']

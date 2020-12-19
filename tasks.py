@@ -8,7 +8,7 @@ from invoke import task
 
 @task
 def pytest(c):
-    c.run('python -m pytest --cov=ctgan')
+    c.run('python -m pytest --cov=gtable')
 
 
 @task
@@ -28,9 +28,9 @@ def readme(c):
 
 @task
 def lint(c):
-    c.run('flake8 ctgan')
+    c.run('flake8 gtable')
     c.run('flake8 tests --ignore=D,SFS2')
-    c.run('isort -c --recursive ctgan tests')
+    c.run('isort -c --recursive gtable tests')
 
 
 def remove_readonly(func, path, _):
