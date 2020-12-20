@@ -99,7 +99,7 @@ class Runner(object):
         Using trained model to generate anonmymous data
         :return:
         """
-        self.model.run()
+        self.model.run(self.real_dataset)
 
     def run(self):
         if self.run_type == "generation":

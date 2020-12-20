@@ -6,8 +6,7 @@ from torch.nn import functional
 
 from gtable.modules.gtable import Discriminator, Generator, ConditionalGenerator
 from gtable.data.sampler import Sampler
-from gtable.data.transformer import DataTransformer
-from gtable.data.inputter import read_csv, read_tsv, write_tsv
+from gtable.data.inputter import write_tsv
 from gtable.utils.misc import pbar
 
 
@@ -48,39 +47,18 @@ class GTABLESynthesizer(BaseSynthesizer):
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.trained_epoches = 0
 
-    def preprocess(self, log_frequency=True):
-
-        if self.config.tsv:
-            train_data, discrete_columns = read_tsv(self.config.real_data,
-                                                    self.config.metadata)
-        else:
-            train_data, discrete_columns = read_csv(self.config.real_data,
-                                                    self.config.metadata,
-                                                    self.config.header,
-                                                    self.config.discrete)
-
-        self.num_samples = self.config.num_samples or len(train_data)
-
-        self.transformer = DataTransformer()
-
-        self.transformer.fit(train_data, discrete_columns)
-
-        # Transforming input data into vector representation
-        # numpy array [nums_samples, dim] (32561, 157)
-        self.train_data = self.transformer.transform(train_data)
+    def build_model(self, log_frequency=True):
 
         self.data_sampler = Sampler(self.train_data, self.transformer.output_info)
-
-        data_dim = self.transformer.output_dimensions
 
         self.cond_generator = ConditionalGenerator(self.train_data,
                                                    self.transformer.output_info,
                                                    log_frequency)
 
         self.generator = Generator(self.embedding_dim + self.cond_generator.n_opt,
-                                   self.gen_dim, data_dim).to(self.device)
+                                   self.gen_dim, self.data_dim).to(self.device)
 
-        self.discriminator = Discriminator(data_dim + self.cond_generator.n_opt,
+        self.discriminator = Discriminator(self.data_dim + self.cond_generator.n_opt,
                                            self.dis_dim).to(self.device)
 
         self.optimizerG = optim.Adam(self.generator.parameters(),
@@ -276,7 +254,8 @@ class GTABLESynthesizer(BaseSynthesizer):
         data = np.concatenate(data, axis=0)
         data = data[:n]
 
-        return self.transformer.inverse_transform(data, None)
+        fake_data, org_fake_data = self.transformer.inverse_transform(data, None)
+        return org_fake_data
 
     def save(self, path):
         assert hasattr(self, "generator")
@@ -295,7 +274,7 @@ class GTABLESynthesizer(BaseSynthesizer):
         self.generator.to(self.device)
         self.discriminator.to(self.device)
 
-    def postprocess(self):
+    def generation(self):
         if self.config.sample_condition_column is not None:
             assert self.config.sample_condition_column_value is not None
 
@@ -317,10 +296,20 @@ class GTABLESynthesizer(BaseSynthesizer):
         model.discriminator.to(model.device)
         return model
 
-    def run(self):
+    def run(self, dataset):
+        assert dataset is not None
 
-        self.preprocess()
+        self.num_samples = dataset.num_samples
+
+        self.transformer = dataset.transformer
+
+        # numpy array [nums_samples, dim] (32561, 157)
+        self.train_data = dataset.X
+
+        self.data_dim = self.transformer.output_dimensions
+
+        self.build_model()
 
         self.train()
 
-        self.postprocess()
+        self.generation()

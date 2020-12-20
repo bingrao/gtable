@@ -512,7 +512,7 @@ class CTGANSynthesizer(BaseSynthesizer):
         model.discriminator.to(model.device)
         return model
 
-    def run(self):
+    def run(self, dataset=None):
         if self.config.tsv:
             data, discrete_columns = read_tsv(self.config.real_data,
                                               self.config.metadata)

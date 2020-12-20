@@ -1,4 +1,4 @@
-from gtable.utils.transformer import DataTransformer
+from gtable.data.transformer import DataTransformer
 from gtable.data.inputter import read_csv
 import numpy as np
 import pandas as pd
