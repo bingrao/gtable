@@ -15,9 +15,11 @@
 
 """Main library entrypoint."""
 from gtable.evaluator import DataEvaluator
+from gtable.bin.preprocess import Preprocess
+from gtable.data.inputter import pickle_load
 from gtable.app import str2app
-# from unknot.utils import checkpoint as checkpoint_util
 from os.path import exists
+import os
 
 
 def load_app(ctx):
@@ -60,6 +62,9 @@ class Runner(object):
         self.real_dataset = None
         self.fake_dataset = None
 
+        # Before runing, we need load the datasets and transformed them if possible
+        self.load_dataset()
+
         if self.run_type == "generation":
             self._model = build_app(self.context)
 
@@ -94,7 +99,7 @@ class Runner(object):
         Using trained model to generate anonmymous data
         :return:
         """
-        self.model.run(self.config)
+        self.model.run()
 
     def run(self):
         if self.run_type == "generation":
@@ -103,3 +108,24 @@ class Runner(object):
             self.evaluate()
         else:
             self.logging.info(f"Run type is wrong {self.run_type}")
+
+    def load_dataset(self):
+        if self.context.real_data is not None and os.path.exists(self.context.real_data):
+            self.logging.info(f"Loading real dataset: {self.context.real_data} ...")
+            if self.data_preprocess is None:
+                self.data_preprocess = Preprocess(self.context)
+            self.real_dataset = self.data_preprocess.run(inputPath=self.context.real_data, isSave=False)
+        else:
+            data_path = self.context.save_data + '.train.pkl'
+            if os.path.exists(data_path):
+                self.logging.info(f"Loading prepared train datasets: {data_path}")
+                self.real_dataset = pickle_load(self.context, data_path)
+            else:
+                self.logging.info(f"The input data does not exist: {data_path}")
+                self.real_dataset = None
+
+        if self.context.fake_data is not None and os.path.exists(self.context.fake_data):
+            self.logging.info(f"Loading fake dataset: {self.context.fake_data} ...")
+            if self.data_preprocess is None:
+                self.data_preprocess = Preprocess(self.context)
+            self.fake_dataset = self.data_preprocess.run(inputPath=self.context.fake_data, isSave=False)

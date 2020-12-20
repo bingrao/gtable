@@ -21,6 +21,10 @@ class BaseSynthesizer:
 
     This should contain the save/load methods.
     """
+    def __init__(self, ctx):
+        self.context = ctx
+        self.logging = self.context.logger
+        self.config = self.context.config
 
     def save(self, path):
         device_backup = self._device
@@ -37,4 +41,4 @@ class BaseSynthesizer:
 
     @classmethod
     def from_contex(cls, ctx):
-        return cls()
+        return cls(ctx)

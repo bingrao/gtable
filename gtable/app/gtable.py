@@ -7,7 +7,8 @@ from torch.nn import functional
 from gtable.modules.gtable import Discriminator, Generator, ConditionalGenerator
 from gtable.data.sampler import Sampler
 from gtable.data.transformer import DataTransformer
-from gtable.data.inputters import read_csv, read_tsv, write_tsv
+from gtable.data.inputter import read_csv, read_tsv, write_tsv
+from gtable.utils.misc import pbar
 
 
 class GTABLESynthesizer(BaseSynthesizer):
@@ -34,8 +35,9 @@ class GTABLESynthesizer(BaseSynthesizer):
             Number of data samples to process in each step.
     """
 
-    def __init__(self, embedding_dim=128, gen_dim=(256, 256), dis_dim=(256, 256),
+    def __init__(self, ctx, embedding_dim=128, gen_dim=(256, 256), dis_dim=(256, 256),
                  l2scale=1e-6, batch_size=500):
+        super(GTABLESynthesizer, self).__init__(ctx)
 
         self.embedding_dim = embedding_dim
         self.gen_dim = gen_dim
@@ -45,6 +47,137 @@ class GTABLESynthesizer(BaseSynthesizer):
         self.batch_size = batch_size
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.trained_epoches = 0
+
+    def preprocess(self, log_frequency=True):
+
+        if self.config.tsv:
+            train_data, discrete_columns = read_tsv(self.config.real_data,
+                                                    self.config.metadata)
+        else:
+            train_data, discrete_columns = read_csv(self.config.real_data,
+                                                    self.config.metadata,
+                                                    self.config.header,
+                                                    self.config.discrete)
+
+        self.num_samples = self.config.num_samples or len(train_data)
+
+        self.transformer = DataTransformer()
+
+        self.transformer.fit(train_data, discrete_columns)
+
+        # Transforming input data into vector representation
+        # numpy array [nums_samples, dim] (32561, 157)
+        self.train_data = self.transformer.transform(train_data)
+
+        self.data_sampler = Sampler(self.train_data, self.transformer.output_info)
+
+        data_dim = self.transformer.output_dimensions
+
+        self.cond_generator = ConditionalGenerator(self.train_data,
+                                                   self.transformer.output_info,
+                                                   log_frequency)
+
+        self.generator = Generator(self.embedding_dim + self.cond_generator.n_opt,
+                                   self.gen_dim, data_dim).to(self.device)
+
+        self.discriminator = Discriminator(data_dim + self.cond_generator.n_opt,
+                                           self.dis_dim).to(self.device)
+
+        self.optimizerG = optim.Adam(self.generator.parameters(),
+                                     lr=2e-4, betas=(0.5, 0.9), weight_decay=self.l2scale)
+
+        self.optimizerD = optim.Adam(self.discriminator.parameters(),
+                                     lr=2e-4, betas=(0.5, 0.9))
+
+    def train(self):
+        assert self.batch_size % 2 == 0
+        mean = torch.zeros(self.batch_size, self.embedding_dim, device=self.device)
+        std = mean + 1
+
+        steps_per_epoch = max(len(self.train_data) // self.batch_size, 1)
+        for i in range(self.config.epoch):
+            bar = pbar(self.num_samples, self.config.batch_size, i, self.config.epoch)
+            self.trained_epoches += 1
+            for id_ in range(steps_per_epoch):
+                fakez = torch.normal(mean=mean, std=std)
+
+                condvec = self.cond_generator.sample(self.batch_size)
+                if condvec is None:
+                    c1, m1, col, opt = None, None, None, None
+                    real = self.data_sampler.sample(self.batch_size, col, opt)
+                else:
+                    c1, m1, col, opt = condvec
+                    c1 = torch.from_numpy(c1).to(self.device)
+                    m1 = torch.from_numpy(m1).to(self.device)
+                    fakez = torch.cat([fakez, c1], dim=1)
+
+                    perm = np.arange(self.batch_size)
+                    np.random.shuffle(perm)
+                    real = self.data_sampler.sample(self.batch_size, col[perm], opt[perm])
+                    c2 = c1[perm]
+
+                fake = self.generator(fakez)
+                fakeact = self._apply_activate(fake)
+
+                real = torch.from_numpy(real.astype('float32')).to(self.device)
+
+                if c1 is not None:
+                    fake_cat = torch.cat([fakeact, c1], dim=1)
+                    real_cat = torch.cat([real, c2], dim=1)
+                else:
+                    real_cat = real
+                    fake_cat = fake
+
+                y_fake = self.discriminator(fake_cat)
+                y_real = self.discriminator(real_cat)
+
+                pen = self.discriminator.calc_gradient_penalty(real_cat, fake_cat, self.device)
+                loss_d = -(torch.mean(y_real) - torch.mean(y_fake))
+
+                self.optimizerD.zero_grad()
+                pen.backward(retain_graph=True)
+                loss_d.backward()
+                self.optimizerD.step()
+
+                fakez = torch.normal(mean=mean, std=std)
+                condvec = self.cond_generator.sample(self.batch_size)
+
+                if condvec is None:
+                    c1, m1, col, opt = None, None, None, None
+                else:
+                    c1, m1, col, opt = condvec
+                    c1 = torch.from_numpy(c1).to(self.device)
+                    m1 = torch.from_numpy(m1).to(self.device)
+                    fakez = torch.cat([fakez, c1], dim=1)
+
+                fake = self.generator(fakez)
+                fakeact = self._apply_activate(fake)
+
+                if c1 is not None:
+                    y_fake = self.discriminator(torch.cat([fakeact, c1], dim=1))
+                else:
+                    y_fake = self.discriminator(fakeact)
+
+                if condvec is None:
+                    cross_entropy = 0
+                else:
+                    cross_entropy = self._cond_loss(fake, c1, m1)
+
+                loss_g = -torch.mean(y_fake) + cross_entropy
+
+                self.optimizerG.zero_grad()
+                loss_g.backward()
+                self.optimizerG.step()
+
+                bar.postfix['g_loss'] = f'{loss_g.detach().cpu():6.3f}'
+                bar.postfix['d_loss'] = f'{loss_d.detach().cpu():6.3f}'
+                bar.update(self.config.batch_size)
+
+            bar.close()
+            del bar
+
+        if self.config.save is not None:
+            self.save(self.config.save)
 
     def _apply_activate(self, data):
         data_t = []
@@ -96,147 +229,6 @@ class GTABLESynthesizer(BaseSynthesizer):
         loss = torch.stack(loss, dim=1)
 
         return (loss * m).sum() / data.size()[0]
-
-    def fit(self, train_data, discrete_columns=tuple(), epochs=300, log_frequency=True):
-        """Fit the CTGAN Synthesizer models to the training data.
-
-        Args:
-            train_data (numpy.ndarray or pandas.DataFrame):
-                Training Data. It must be a 2-dimensional numpy array or a
-                pandas.DataFrame.
-            discrete_columns (list-like):
-                List of discrete columns to be used to generate the Conditional
-                Vector. If ``train_data`` is a Numpy array, this list should
-                contain the integer indices of the columns. Otherwise, if it is
-                a ``pandas.DataFrame``, this list should contain the column names.
-            epochs (int):
-                Number of training epochs. Defaults to 300.
-            log_frequency (boolean):
-                Whether to use log frequency of categorical levels in conditional
-                sampling. Defaults to ``True``.
-        """
-
-        if not hasattr(self, "transformer"):
-            self.transformer = DataTransformer()
-            self.transformer.fit(train_data, discrete_columns)
-        train_data = self.transformer.transform(train_data)
-
-        data_sampler = Sampler(train_data, self.transformer.output_info)
-
-        data_dim = self.transformer.output_dimensions
-
-        if not hasattr(self, "cond_generator"):
-            self.cond_generator = ConditionalGenerator(
-                train_data,
-                self.transformer.output_info,
-                log_frequency
-            )
-
-        if not hasattr(self, "generator"):
-            self.generator = Generator(
-                self.embedding_dim + self.cond_generator.n_opt,
-                self.gen_dim,
-                data_dim
-            ).to(self.device)
-
-        if not hasattr(self, "discriminator"):
-            self.discriminator = Discriminator(
-                data_dim + self.cond_generator.n_opt,
-                self.dis_dim
-            ).to(self.device)
-
-        if not hasattr(self, "optimizerG"):
-            self.optimizerG = optim.Adam(
-                self.generator.parameters(), lr=2e-4, betas=(0.5, 0.9),
-                weight_decay=self.l2scale
-            )
-
-        if not hasattr(self, "optimizerD"):
-            self.optimizerD = optim.Adam(
-                self.discriminator.parameters(), lr=2e-4, betas=(0.5, 0.9))
-
-        assert self.batch_size % 2 == 0
-        mean = torch.zeros(self.batch_size, self.embedding_dim, device=self.device)
-        std = mean + 1
-
-        steps_per_epoch = max(len(train_data) // self.batch_size, 1)
-        for i in range(epochs):
-            self.trained_epoches += 1
-            for id_ in range(steps_per_epoch):
-                fakez = torch.normal(mean=mean, std=std)
-
-                condvec = self.cond_generator.sample(self.batch_size)
-                if condvec is None:
-                    c1, m1, col, opt = None, None, None, None
-                    real = data_sampler.sample(self.batch_size, col, opt)
-                else:
-                    c1, m1, col, opt = condvec
-                    c1 = torch.from_numpy(c1).to(self.device)
-                    m1 = torch.from_numpy(m1).to(self.device)
-                    fakez = torch.cat([fakez, c1], dim=1)
-
-                    perm = np.arange(self.batch_size)
-                    np.random.shuffle(perm)
-                    real = data_sampler.sample(self.batch_size, col[perm], opt[perm])
-                    c2 = c1[perm]
-
-                fake = self.generator(fakez)
-                fakeact = self._apply_activate(fake)
-
-                real = torch.from_numpy(real.astype('float32')).to(self.device)
-
-                if c1 is not None:
-                    fake_cat = torch.cat([fakeact, c1], dim=1)
-                    real_cat = torch.cat([real, c2], dim=1)
-                else:
-                    real_cat = real
-                    fake_cat = fake
-
-                y_fake = self.discriminator(fake_cat)
-                y_real = self.discriminator(real_cat)
-
-                pen = self.discriminator.calc_gradient_penalty(
-                    real_cat, fake_cat, self.device)
-                loss_d = -(torch.mean(y_real) - torch.mean(y_fake))
-
-                self.optimizerD.zero_grad()
-                pen.backward(retain_graph=True)
-                loss_d.backward()
-                self.optimizerD.step()
-
-                fakez = torch.normal(mean=mean, std=std)
-                condvec = self.cond_generator.sample(self.batch_size)
-
-                if condvec is None:
-                    c1, m1, col, opt = None, None, None, None
-                else:
-                    c1, m1, col, opt = condvec
-                    c1 = torch.from_numpy(c1).to(self.device)
-                    m1 = torch.from_numpy(m1).to(self.device)
-                    fakez = torch.cat([fakez, c1], dim=1)
-
-                fake = self.generator(fakez)
-                fakeact = self._apply_activate(fake)
-
-                if c1 is not None:
-                    y_fake = self.discriminator(torch.cat([fakeact, c1], dim=1))
-                else:
-                    y_fake = self.discriminator(fakeact)
-
-                if condvec is None:
-                    cross_entropy = 0
-                else:
-                    cross_entropy = self._cond_loss(fake, c1, m1)
-
-                loss_g = -torch.mean(y_fake) + cross_entropy
-
-                self.optimizerG.zero_grad()
-                loss_g.backward()
-                self.optimizerG.step()
-
-            print("Epoch %d, Loss G: %.4f, Loss D: %.4f" %
-                  (self.trained_epoches, loss_g.detach().cpu(), loss_d.detach().cpu()),
-                  flush=True)
 
     def sample(self, n, condition_column=None, condition_value=None):
         """Sample data similar to the training data.
@@ -303,6 +295,20 @@ class GTABLESynthesizer(BaseSynthesizer):
         self.generator.to(self.device)
         self.discriminator.to(self.device)
 
+    def postprocess(self):
+        if self.config.sample_condition_column is not None:
+            assert self.config.sample_condition_column_value is not None
+
+        sampled = self.sample(
+            self.num_samples,
+            self.config.sample_condition_column,
+            self.config.sample_condition_column_value)
+
+        if self.config.tsv:
+            write_tsv(sampled, self.config.metadata, self.config.output)
+        else:
+            sampled.to_csv(self.config.output, index=False)
+
     @classmethod
     def load(cls, path):
         model = torch.load(path)
@@ -311,32 +317,10 @@ class GTABLESynthesizer(BaseSynthesizer):
         model.discriminator.to(model.device)
         return model
 
-    def run(self, opts):
-        if opts.tsv:
-            data, discrete_columns = read_tsv(opts.real_data,
-                                              opts.metadata)
-        else:
-            data, discrete_columns = read_csv(opts.real_data,
-                                              opts.metadata,
-                                              opts.header,
-                                              opts.discrete)
+    def run(self):
 
-        self.fit(data, discrete_columns, opts.epoch)
+        self.preprocess()
 
-        if opts.save is not None:
-            self.save(opts.save)
+        self.train()
 
-        num_samples = opts.num_samples or len(data)
-
-        if opts.sample_condition_column is not None:
-            assert opts.sample_condition_column_value is not None
-
-        sampled = self.sample(
-            num_samples,
-            opts.sample_condition_column,
-            opts.sample_condition_column_value)
-
-        if opts.tsv:
-            write_tsv(sampled, opts.metadata, opts.output)
-        else:
-            sampled.to_csv(opts.output, index=False)
+        self.postprocess()

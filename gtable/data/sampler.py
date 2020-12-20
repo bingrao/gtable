@@ -18,6 +18,7 @@ class Sampler(object):
                 skip = True
             elif item[1] == 'softmax':
                 if skip:
+                    # Skip continuous data one hot vector
                     skip = False
                     st += item[0]
                     continue

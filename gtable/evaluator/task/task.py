@@ -21,7 +21,7 @@ import abc
 import copy
 import pandas as pd
 import numpy as np
-from gtable.data.inputters import category_to_number
+from gtable.data.inputter import category_to_number
 
 
 class BaseTask(abc.ABC):

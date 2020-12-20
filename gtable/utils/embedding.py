@@ -16,7 +16,7 @@
 from sklearn.mixture import BayesianGaussianMixture
 from sklearn.preprocessing import MinMaxScaler, OneHotEncoder
 import abc
-from unknot.utils.misc import ClassRegistry
+from gtable.utils.misc import ClassRegistry
 import numpy as np
 
 

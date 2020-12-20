@@ -50,16 +50,16 @@ class DataEvaluator:
 
         self.random_seed = self.config.seed
 
-        if self.config.n_samples is None:
-            self.n_samples = min(len(self.real), len(self.fake))
-        elif len(self.fake) >= self.config.n_samples and len(self.real) >= self.config.n_samples:
-            self.n_samples = self.config.n_samples
+        if self.config.num_samples is None:
+            self.num_samples = min(len(self.real), len(self.fake))
+        elif len(self.fake) >= self.config.num_samples and len(self.real) >= self.config.num_samples:
+            self.num_samples = self.config.num_samples
         else:
-            raise Exception(f'Make sure n_samples < len(fake/real). len(real): '
+            raise Exception(f'Make sure num_samples < len(fake/real). len(real): '
                             f'{len(self.real)}, len(fake): {len(self.fake)}')
 
-        self.real = self.real.sample(self.n_samples)
-        self.fake = self.fake.sample(self.n_samples)
+        self.real = self.real.sample(self.num_samples)
+        self.fake = self.fake.sample(self.num_samples)
         assert len(self.real) == len(self.fake), f'len(real) != len(fake)'
 
         self.is_class_evaluator = False
@@ -339,7 +339,8 @@ class DataEvaluator:
                 diff = (real_score() - fake_score()).abs().rename("sum_diff")
                 total_diff = diff if total_diff is None else total_diff + diff
 
-        columns_metrics = pd.concat([columns_metrics, total_diff], axis=1)
+        columns_metrics = pd.concat([columns_metrics, total_diff], axis=1) \
+            if total_diff is not None else columns_metrics
 
         total_metrics['real'] = real_metrics.values()
         total_metrics['fake'] = fake_metrics.values()
@@ -438,16 +439,16 @@ class DataEvaluator:
         fake = fake[columns]
         return real, fake
 
-    def row_distance(self, n_samples: int = None) -> Tuple[float, float]:
+    def row_distance(self, num_samples: int = None) -> Tuple[float, float]:
         """
         Calculate mean and standard deviation distances between `self.fake` and `self.real`.
 
-        :param n_samples: Number of samples to take for evaluation.
+        :param num_samples: Number of samples to take for evaluation.
         Compute time increases exponentially.
         :return: `(mean, std)` of these distances.
         """
-        if n_samples is None:
-            n_samples = len(self.real)
+        if num_samples is None:
+            num_samples = len(self.real)
         real = numerical_encoding(self.real, nominal_columns=self.categorial_cols)
         fake = numerical_encoding(self.fake, nominal_columns=self.categorial_cols)
 
@@ -465,7 +466,7 @@ class DataEvaluator:
                 fake[column] = (fake[column] - fake[column].mean()) / fake[column].std()
         assert real.columns.tolist() == fake.columns.tolist()
 
-        distances = cdist(real[:n_samples], fake[:n_samples])
+        distances = cdist(real[:num_samples], fake[:num_samples])
         min_distances = np.min(distances, axis=1)
         min_mean = np.mean(min_distances)
         min_std = np.std(min_distances)

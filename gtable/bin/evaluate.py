@@ -15,7 +15,7 @@
 # limitations under the License.
 
 from __future__ import unicode_literals
-import unknot.utils.opts as opts
+import gtable.utils.opts as opts
 from gtable.utils import ArgumentParser
 from gtable.bin import Runner
 from gtable.utils import Context

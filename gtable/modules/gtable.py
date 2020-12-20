@@ -3,37 +3,39 @@ from torch.nn import BatchNorm1d, Dropout, LeakyReLU, Linear, Module, ReLU, Sequ
 import numpy as np
 
 
-class Residual(Module):
+class DiscriminatorLayer(Module):
     def __init__(self, i, o):
-        super(Residual, self).__init__()
+        super(DiscriminatorLayer, self).__init__()
         self.fc = Linear(i, o)
-        self.bn = BatchNorm1d(o)
-        self.relu = ReLU()
+        self.leakyReLu = LeakyReLU(0.2)
+        self.dropout = Dropout(0.5)
 
     def forward(self, x):
         out = self.fc(x)
-        out = self.bn(out)
-        out = self.relu(out)
-        return torch.cat([out, x], dim=1)
+        out = self.leakyReLu(out)
+        return self.dropout(out)
 
 
 class Discriminator(Module):
     def __init__(self, input_dim, dis_dims, pack=10):
+        """
+        (input_dim * pack) --> DiscriminatorLayer --> DiscriminatorLayer --> Linear--> (1)
+        DiscriminatorLayer: Linear --> LeakyReLU --> Dropout
+        """
         super(Discriminator, self).__init__()
         dim = input_dim * pack
         self.pack = pack
         self.packdim = dim
         seq = []
         for item in list(dis_dims):
-            seq += [Linear(dim, item), LeakyReLU(0.2), Dropout(0.5)]
+            seq += [DiscriminatorLayer(dim, item)]
             dim = item
-
         seq += [Linear(dim, 1)]
-        self.seq = Sequential(*seq)
+        self.model = Sequential(*seq)
 
     def forward(self, x):
         assert x.size()[0] % self.pack == 0
-        return self.seq(x.view(-1, self.packdim))
+        return self.model(x.view(-1, self.packdim))
 
     def calc_gradient_penalty(self, real_data, fake_data, device='cpu', pac=10, lambda_=10):
         alpha = torch.rand(real_data.size(0) // pac, 1, 1, device=device)
@@ -47,30 +49,45 @@ class Discriminator(Module):
         gradients = torch.autograd.grad(
             outputs=disc_interpolates, inputs=interpolates,
             grad_outputs=torch.ones(disc_interpolates.size(), device=device),
-            create_graph=True, retain_graph=True, only_inputs=True
-        )[0]
+            create_graph=True, retain_graph=True, only_inputs=True)[0]
 
-        gradient_penalty = ((
-                                gradients.view(-1, pac * real_data.size(1)).norm(2, dim=1) - 1
-                            ) ** 2).mean() * lambda_
+        gradient_penalty = ((gradients.view(-1, pac * real_data.size(1))
+                             .norm(2, dim=1) - 1) ** 2).mean() * lambda_
 
         return gradient_penalty
 
 
+class GeneratorLayer(Module):
+    def __init__(self, i, o):
+        super(GeneratorLayer, self).__init__()
+        self.fc = Linear(i, o)
+        self.bn = BatchNorm1d(o)
+        self.relu = ReLU()
+
+    def forward(self, x):
+        out = self.fc(x)
+        out = self.bn(out)
+        out = self.relu(out)
+        return torch.cat([out, x], dim=1)
+
+
 class Generator(Module):
     def __init__(self, embedding_dim, gen_dims, data_dim):
+        """
+        (embedding_dim) --> GeneratorLayer () --> GeneratorLayer --> Linear (data_dim)
+        GeneratorLayer: Linear --> BatchNorm --> ReLU --> Concatenate
+        """
         super(Generator, self).__init__()
         dim = embedding_dim
         seq = []
         for item in list(gen_dims):
-            seq += [Residual(dim, item)]
+            seq += [GeneratorLayer(dim, item)]
             dim += item
         seq.append(Linear(dim, data_dim))
-        self.seq = Sequential(*seq)
+        self.model = Sequential(*seq)
 
     def forward(self, x):
-        data = self.seq(x)
-        return data
+        return self.model(x)
 
 
 class ConditionalGenerator(object):
@@ -86,7 +103,6 @@ class ConditionalGenerator(object):
                 start += item[0]
                 skip = True
                 continue
-
             elif item[1] == 'softmax':
                 if skip:
                     skip = False
@@ -98,7 +114,6 @@ class ConditionalGenerator(object):
                 counter += 1
                 self.model.append(np.argmax(data[:, start:end], axis=-1))
                 start = end
-
             else:
                 assert 0
 

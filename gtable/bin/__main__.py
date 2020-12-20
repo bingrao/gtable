@@ -1,6 +1,6 @@
 import argparse
 
-from gtable.data.inputters import read_csv, read_tsv, write_tsv
+from gtable.data.inputter import read_csv, read_tsv, write_tsv
 from gtable.app import CTGANSynthesizer
 
 
