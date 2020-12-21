@@ -1,6 +1,13 @@
 import torch
 from torch.nn import BatchNorm1d, Dropout, LeakyReLU, Linear, Module, ReLU, Sequential
 import numpy as np
+import torch.nn as nn
+import copy
+
+
+def clones(module, N):
+    """Produce N identical layers."""
+    return nn.ModuleList([copy.deepcopy(module) for _ in range(N)])
 
 
 class DiscriminatorLayer(Module):
@@ -17,27 +24,33 @@ class DiscriminatorLayer(Module):
 
 
 class Discriminator(Module):
-    def __init__(self, input_dim, dis_dims, pack=10):
+    def __init__(self, input_dim, output_dim, opt):
         """
         (input_dim * pack) --> DiscriminatorLayer --> DiscriminatorLayer --> Linear--> (1)
         DiscriminatorLayer: Linear --> LeakyReLU --> Dropout
         """
         super(Discriminator, self).__init__()
-        dim = input_dim * pack
-        self.pack = pack
-        self.packdim = dim
+        self.pack = opt.dis_pack
+        self._input_dim = input_dim * self.pack
+        self._output_dim = output_dim
+        self.nums_layers = opt.dis_layers
+        self.layer_dim = opt.dis_dim
+        self.model = self.build_model()
+
+    def build_model(self):
+        dim = self._input_dim
         seq = []
-        for item in list(dis_dims):
-            seq += [DiscriminatorLayer(dim, item)]
-            dim = item
-        seq += [Linear(dim, 1)]
-        self.model = Sequential(*seq)
+        for i in range(self.nums_layers):
+            seq += [DiscriminatorLayer(dim, self.layer_dim)]
+            dim = self.layer_dim
+        seq += [Linear(dim, self._output_dim)]
+        return Sequential(*seq)
 
     def forward(self, x):
         assert x.size()[0] % self.pack == 0
-        return self.model(x.view(-1, self.packdim))
+        return self.model(x.view(-1, self._input_dim))
 
-    def calc_gradient_penalty(self, real_data, fake_data, device='cpu', pac=10, lambda_=10):
+    def gradient_penalty(self, real_data, fake_data, device='cpu', pac=10, lambda_=10):
         alpha = torch.rand(real_data.size(0) // pac, 1, 1, device=device)
         alpha = alpha.repeat(1, pac, real_data.size(1))
         alpha = alpha.view(-1, real_data.size(1))
@@ -56,6 +69,9 @@ class Discriminator(Module):
 
         return gradient_penalty
 
+    def loss(self, y_real, y_fake):
+        return -(torch.mean(y_real) - torch.mean(y_fake))
+
 
 class GeneratorLayer(Module):
     def __init__(self, i, o):
@@ -72,26 +88,36 @@ class GeneratorLayer(Module):
 
 
 class Generator(Module):
-    def __init__(self, embedding_dim, gen_dims, data_dim):
+    def __init__(self, input_dim, output_dim, opt):
         """
         (embedding_dim) --> GeneratorLayer () --> GeneratorLayer --> Linear (data_dim)
         GeneratorLayer: Linear --> BatchNorm --> ReLU --> Concatenate
         """
         super(Generator, self).__init__()
-        dim = embedding_dim
+        self._input_dim = input_dim
+        self._output_dim = output_dim
+        self.nums_layers = opt.gen_layers
+        self.layer_dim = opt.gen_dim
+        self.model = self.build_model()
+
+    def build_model(self):
         seq = []
-        for item in list(gen_dims):
-            seq += [GeneratorLayer(dim, item)]
-            dim += item
-        seq.append(Linear(dim, data_dim))
-        self.model = Sequential(*seq)
+        dim = self._input_dim
+        for i in range(self.nums_layers):
+            seq += [GeneratorLayer(dim, self.layer_dim)]
+            dim += self.layer_dim
+        seq.append(Linear(dim, self._output_dim))
+        return Sequential(*seq)
 
     def forward(self, x):
         return self.model(x)
 
+    def loss(self, y_fake):
+        return -torch.mean(y_fake)
+
 
 class ConditionalGenerator(object):
-    def __init__(self, data, output_info, log_frequency):
+    def __init__(self, data, output_info, log_frequency, opt=None):
         self.model = []
 
         start = 0

@@ -137,60 +137,40 @@ def model_opts(parser):
     group.add('--feature_size', '-feature_size', type=int, default=266,
               help="Size of last FC layer to calculate the Hinge Loss fucntion.")
 
-    group.add("--noise_dim", "-noise_dim", type=int, default=100,
+    group.add("--noise_dim", "-noise_dim", type=int, default=128,
               help="The latent noise dimention")
 
-    group.add("--input_height", "-input_height", type=int, default=7,
-              help="The size of image to use (will be center cropped). [108]")
+    group.add("--gen_layers", "-gen_layers", type=int, default=2,
+              help="The number of generator layers")
 
-    group.add("--input_width", "-input_width", type=int, default=7,
-              help="The size of image to use (will be center cropped). "
-                   "If None, same value as input_height [None]")
+    group.add("--gen_dim", "-gen_dim", type=int, default=256,
+              help="The dimention of a generator layer")
 
-    group.add("--output_height", "-output_height", type=int, default=7,
-              help="The size of the output images to produce [64]")
+    group.add("--dis_layers", "-dis_layers", type=int, default=2,
+              help="The number of discriminator layers")
 
-    group.add("--output_width", "-output_width", type=int, default=7,
-              help="The size of the output images to produce. "
-                   "If None, same value as output_height [None]")
+    group.add("--dis_dim", "-dis_dim", type=int, default=256,
+              help="The dimention of a discriminator layer")
 
-    group = parser.add_argument_group('Info Loss')
-
-    group.add("--info_loss", "-info_loss", default=True, action="store_true",
-              help="Append Info loss to generator model")
-
-    group.add('--alpha', '-alpha', type=float, default=1.0,
-              help="The weight of original GAN part of loss function [0-1.0]")
-
-    group.add('--beta', '-beta', type=float, default=1.0,
-              help="The weight of information loss part of loss function [0-1.0]")
-
-    group.add('--delta_m', '-delta_m', type=float, default=0.0,
-              help="dddd")
-
-    group.add('--delta_v', '-delta_v', type=float, default=0.0,
-              help="ddd")
-
-    group.add('--mac', '-mac', type=float, default=0.99,
-              help="Moving Average Contributions")
-
-    group.add('--g_penalty', '-g_penalty', type=float, default=0.0,
-              help='Gradient penalty weight.')
-
-    group.add('--n_critic', '-n_critic', type=int, default=1,
-              help='Critic updates per generator update.')
+    group.add("--dis_pack", "-dis_pack", type=int, default=10,
+              help="The number of packages in a discriminator layer")
 
 
 def optimizer_opts(parser):
     # learning rate
     group = parser.add_argument_group('Optimization')
+
+    group.add('--optim', '-optim', default='adam',
+              choices=['sgd', 'adagrad', 'adadelta', 'adam'],
+              help="Optimization method.")
+
     group.add('--learning_rate', '-learning_rate', type=float, default=1e-4,
               help="Starting learning rate. "
                    "Recommended settings: sgd = 1, adagrad = 0.1, "
                    "adadelta = 1, adam = 0.001")
 
     group.add('--learning_rate_decay', '-learning_rate_decay',
-              type=float, default=1e-4,
+              type=float, default=1e-6,
               help="If update_learning_rate, decay learning rate by "
                    "this much if steps have gone past "
                    "start_decay_steps")
@@ -214,7 +194,6 @@ def optimizer_opts(parser):
                    'suggested a value of 0.98 for beta2, this parameter may '
                    'not work well for normal models / default '
                    'baselines.')
-
 
 def checkpoint_opts(parser):
     group = parser.add_argument_group('Checkpoints')
@@ -260,8 +239,8 @@ def train_opts(parser):
 
     group = parser.add_argument_group('Traning')
 
-    group.add('--train', '-train', type=str, default='VGAN',
-              choices=['VGAN', 'WGAN-GP'], help="The way to train GAN model")
+    # group.add('--train', '-train', type=str, default='VGAN',
+    #           choices=['VGAN', 'WGAN-GP'], help="The way to train GAN model")
 
     group.add('--label_smoothing', '-label_smoothing', type=float, default=0.0,
               help="Label smoothing value epsilon. "
@@ -290,7 +269,7 @@ def train_opts(parser):
     group.add("--gpu_allow_growth", "-gpu_allow_growth", default=False, action="store_true",
               help="Allocate GPU memory dynamically.")
 
-    group.add('--epoch', '-epoch', type=int, default=10,
+    group.add('--epochs', '-epochs', type=int, default=10,
               help='Deprecated epochs see train_steps')
 
     group.add("--eval_steps", "-eval_steps", type=int, default=1000,
@@ -309,6 +288,12 @@ def train_opts(parser):
                        help="Select a discrete column name.")
     group.add_argument("--sample_condition_column_value", default=None, type=str,
                        help="Specify the value of the selected discrete column.")
+
+    group.add('--g_penalty', '-g_penalty', type=float, default=1.0,
+              help='Gradient penalty weight.')
+
+    group.add('--n_critic', '-n_critic', type=int, default=1,
+              help='Critic updates per generator update.')
 
 
 def generation_opts(parser):

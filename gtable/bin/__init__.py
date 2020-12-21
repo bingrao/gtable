@@ -43,7 +43,7 @@ def build_app(ctx):
         ctx.logger.info(f'Loading model from checkpoint {model_path}')
         model = build_base_model(ctx, True, model_path)
     else:
-        ctx.logger.info('Building model...')
+        ctx.logger.info(f'Building model {ctx.config.app} ...')
         model = build_base_model(ctx)
     return model
 
@@ -57,8 +57,8 @@ class Runner(object):
         self.logging = self.context.logger
         self.run_type = self.config.run_type
         self._model = None
-        self.data_preprocess = None
-        self.data_evaluator = None
+        self._preprocess = None
+        self._evaluator = None
         self.real_dataset = None
         self.fake_dataset = None
 
@@ -69,14 +69,10 @@ class Runner(object):
             self._model = build_app(self.context)
 
         if self.run_type == "evaluate":
-            self.data_evaluator = DataEvaluator(self.context, self.real_dataset, self.fake_dataset)
+            self._evaluator = DataEvaluator(self.context, self.real_dataset, self.fake_dataset)
 
-        # if self.model is not None and self.real_dataset is None:
-        #     raise ValueError("There is no input data transformer for existing model")
-        #
-        # # We need to update transfomer in the model
-        # if self.model and self.real_dataset.transformer:
-        #     self.model.transformer = self.real_dataset.transformer
+        if self.real_dataset is None:
+            raise ValueError("There is no input data transformer for existing model")
 
     @property
     def model(self):
@@ -87,12 +83,35 @@ class Runner(object):
         """The active model directory."""
         return self.model.checkpoint_dir
 
+    def load_dataset(self):
+        if self.context.real_data is not None and os.path.exists(self.context.real_data):
+            self.logging.info(f"Loading real dataset: {self.context.real_data} ...")
+            if self._preprocess is None:
+                self._preprocess = Preprocess(self.context)
+            self.real_dataset = self._preprocess.run(inputPath=self.context.real_data,
+                                                     isSave=False)
+        else:
+            data_path = self.context.save_data + '.train.pkl'
+            if os.path.exists(data_path):
+                self.logging.info(f"Loading prepared train datasets: {data_path}")
+                self.real_dataset = pickle_load(self.context, data_path)
+            else:
+                self.logging.info(f"The input data does not exist: {data_path}")
+                self.real_dataset = None
+
+        if self.context.fake_data is not None and os.path.exists(self.context.fake_data):
+            self.logging.info(f"Loading fake dataset: {self.context.fake_data} ...")
+            if self._preprocess is None:
+                self._preprocess = Preprocess(self.context)
+            self.fake_dataset = self._preprocess.run(inputPath=self.context.fake_data,
+                                                     isSave=False)
+
     def evaluate(self):
         """
         Data Preprocess and clean task
         :return: generator dataset for traning task
         """
-        self.data_evaluator.run()
+        self._evaluator.run()
 
     def generation(self):
         """
@@ -108,24 +127,3 @@ class Runner(object):
             self.evaluate()
         else:
             self.logging.info(f"Run type is wrong {self.run_type}")
-
-    def load_dataset(self):
-        if self.context.real_data is not None and os.path.exists(self.context.real_data):
-            self.logging.info(f"Loading real dataset: {self.context.real_data} ...")
-            if self.data_preprocess is None:
-                self.data_preprocess = Preprocess(self.context)
-            self.real_dataset = self.data_preprocess.run(inputPath=self.context.real_data, isSave=False)
-        else:
-            data_path = self.context.save_data + '.train.pkl'
-            if os.path.exists(data_path):
-                self.logging.info(f"Loading prepared train datasets: {data_path}")
-                self.real_dataset = pickle_load(self.context, data_path)
-            else:
-                self.logging.info(f"The input data does not exist: {data_path}")
-                self.real_dataset = None
-
-        if self.context.fake_data is not None and os.path.exists(self.context.fake_data):
-            self.logging.info(f"Loading fake dataset: {self.context.fake_data} ...")
-            if self.data_preprocess is None:
-                self.data_preprocess = Preprocess(self.context)
-            self.fake_dataset = self.data_preprocess.run(inputPath=self.context.fake_data, isSave=False)

@@ -1,13 +1,12 @@
 from gtable.app.base import BaseSynthesizer
 import numpy as np
 import torch
-from torch import optim
 from torch.nn import functional
-
 from gtable.modules.gtable import Discriminator, Generator, ConditionalGenerator
 from gtable.data.sampler import Sampler
 from gtable.data.inputter import write_tsv
 from gtable.utils.misc import pbar
+from gtable.utils.optimizers import build_torch_optimizer
 
 
 class GTABLESynthesizer(BaseSynthesizer):
@@ -18,34 +17,14 @@ class GTABLESynthesizer(BaseSynthesizer):
 
     For more details about the process, please check the [Modeling Tabular data using
     Conditional GAN](https://arxiv.org/abs/1907.00503) paper.
-
-    Args:
-        embedding_dim (int):
-            Size of the random sample passed to the Generator. Defaults to 128.
-        gen_dim (tuple or list of ints):
-            Size of the output samples for each one of the Residuals. A Residual Layer
-            will be created for each one of the values provided. Defaults to (256, 256).
-        dis_dim (tuple or list of ints):
-            Size of the output samples for each one of the Discriminator Layers. A Linear Layer
-            will be created for each one of the values provided. Defaults to (256, 256).
-        l2scale (float):
-            Wheight Decay for the Adam Optimizer. Defaults to 1e-6.
-        batch_size (int):
-            Number of data samples to process in each step.
     """
 
-    def __init__(self, ctx, embedding_dim=128, gen_dim=(256, 256), dis_dim=(256, 256),
-                 l2scale=1e-6, batch_size=500):
+    def __init__(self, ctx):
         super(GTABLESynthesizer, self).__init__(ctx)
 
-        self.embedding_dim = embedding_dim
-        self.gen_dim = gen_dim
-        self.dis_dim = dis_dim
-
-        self.l2scale = l2scale
-        self.batch_size = batch_size
+        self.noise_dim = self.config.noise_dim
+        self.batch_size = self.config.batch_size
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        self.trained_epoches = 0
 
     def build_model(self, log_frequency=True):
 
@@ -53,99 +32,120 @@ class GTABLESynthesizer(BaseSynthesizer):
 
         self.cond_generator = ConditionalGenerator(self.train_data,
                                                    self.transformer.output_info,
-                                                   log_frequency)
+                                                   log_frequency,
+                                                   self.config)
 
-        self.generator = Generator(self.embedding_dim + self.cond_generator.n_opt,
-                                   self.gen_dim, self.data_dim).to(self.device)
+        self.generator = Generator(self.noise_dim + self.cond_generator.n_opt,
+                                   self.data_dim, self.config).to(self.device)
 
         self.discriminator = Discriminator(self.data_dim + self.cond_generator.n_opt,
-                                           self.dis_dim).to(self.device)
+                                           1, self.config).to(self.device)
 
-        self.optimizerG = optim.Adam(self.generator.parameters(),
-                                     lr=2e-4, betas=(0.5, 0.9), weight_decay=self.l2scale)
+        self.config.learning_rate_decay = 1e-6
+        self.optimizerG = build_torch_optimizer(self.generator, self.config)
 
-        self.optimizerD = optim.Adam(self.discriminator.parameters(),
-                                     lr=2e-4, betas=(0.5, 0.9))
+        self.config.learning_rate_decay = 0
+        self.optimizerD = build_torch_optimizer(self.discriminator, self.config)
+
+    def discriminator_train_step(self, fakez):
+        # 1. Reset gradients
+        self.optimizerD.zero_grad()
+
+        # 2. Sample noise and generate fake data
+        condvec = self.cond_generator.sample(self.batch_size)
+        if condvec is None:
+            c1, m1, col, opt = None, None, None, None
+            real = self.data_sampler.sample(self.batch_size, col, opt)
+            c2 = c1
+        else:
+            c1, m1, col, opt = condvec
+            c1 = torch.from_numpy(c1).to(self.device)
+            # m1 = torch.from_numpy(m1).to(self.device)
+            fakez = torch.cat([fakez, c1], dim=1)
+
+            perm = np.arange(self.batch_size)
+            np.random.shuffle(perm)
+            real = self.data_sampler.sample(self.batch_size, col[perm], opt[perm])
+            c2 = c1[perm]
+
+        fake = self.generator(fakez)
+        fakeact = self._apply_activate(fake)
+
+        real = torch.from_numpy(real.astype('float32')).to(self.device)
+
+        if c1 is not None:
+            fake_cat = torch.cat([fakeact, c1], dim=1)
+            real_cat = torch.cat([real, c2], dim=1)
+        else:
+            real_cat = real
+            fake_cat = fake
+
+        # 3. Sample noise and generate fake data
+        y_real = self.discriminator(real_cat)
+        y_fake = self.discriminator(fake_cat)
+
+        # 4. Calculate error
+        pen = self.config.g_penalty * self.discriminator.gradient_penalty(real_cat,
+                                                                          fake_cat,
+                                                                          self.device)
+        loss_d = self.discriminator.loss(y_real, y_fake)
+
+        # 5. loss backpropagate
+        pen.backward(retain_graph=True)
+        loss_d.backward()
+        self.optimizerD.step()
+
+        return loss_d + pen
+
+    def generator_train_step(self, fakez):
+        # Reset gradients
+        self.optimizerG.zero_grad()
+
+        # 2. Sample noise and generate fake data
+        condvec = self.cond_generator.sample(self.batch_size)
+        if condvec is None:
+            c1, m1, col, opt = None, None, None, None
+        else:
+            c1, m1, col, opt = condvec
+            c1 = torch.from_numpy(c1).to(self.device)
+            m1 = torch.from_numpy(m1).to(self.device)
+            fakez = torch.cat([fakez, c1], dim=1)
+
+        fake = self.generator(fakez)
+        fakeact = self._apply_activate(fake)
+
+        if c1 is not None:
+            y_fake = self.discriminator(torch.cat([fakeact, c1], dim=1))
+        else:
+            y_fake = self.discriminator(fakeact)
+
+        if condvec is None:
+            cross_entropy = 0
+        else:
+            cross_entropy = self._cond_loss(fake, c1, m1)
+
+        # 4. Calculate error
+        loss_g = self.generator.loss(y_fake) + cross_entropy
+
+        # 5. loss backpropagate
+        loss_g.backward()
+        self.optimizerG.step()
+
+        return loss_g
 
     def train(self):
         assert self.batch_size % 2 == 0
-        mean = torch.zeros(self.batch_size, self.embedding_dim, device=self.device)
+        mean = torch.zeros(self.batch_size, self.noise_dim, device=self.device)
         std = mean + 1
 
         steps_per_epoch = max(len(self.train_data) // self.batch_size, 1)
-        for i in range(self.config.epoch):
-            bar = pbar(self.num_samples, self.config.batch_size, i, self.config.epoch)
-            self.trained_epoches += 1
-            for id_ in range(steps_per_epoch):
-                fakez = torch.normal(mean=mean, std=std)
+        for epoch in range(self.config.epochs):
+            bar = pbar(self.num_samples, self.config.batch_size, epoch, self.config.epochs)
+            for step in range(steps_per_epoch):
+                loss_g = self.generator_train_step(torch.normal(mean=mean, std=std))
 
-                condvec = self.cond_generator.sample(self.batch_size)
-                if condvec is None:
-                    c1, m1, col, opt = None, None, None, None
-                    real = self.data_sampler.sample(self.batch_size, col, opt)
-                else:
-                    c1, m1, col, opt = condvec
-                    c1 = torch.from_numpy(c1).to(self.device)
-                    m1 = torch.from_numpy(m1).to(self.device)
-                    fakez = torch.cat([fakez, c1], dim=1)
-
-                    perm = np.arange(self.batch_size)
-                    np.random.shuffle(perm)
-                    real = self.data_sampler.sample(self.batch_size, col[perm], opt[perm])
-                    c2 = c1[perm]
-
-                fake = self.generator(fakez)
-                fakeact = self._apply_activate(fake)
-
-                real = torch.from_numpy(real.astype('float32')).to(self.device)
-
-                if c1 is not None:
-                    fake_cat = torch.cat([fakeact, c1], dim=1)
-                    real_cat = torch.cat([real, c2], dim=1)
-                else:
-                    real_cat = real
-                    fake_cat = fake
-
-                y_fake = self.discriminator(fake_cat)
-                y_real = self.discriminator(real_cat)
-
-                pen = self.discriminator.calc_gradient_penalty(real_cat, fake_cat, self.device)
-                loss_d = -(torch.mean(y_real) - torch.mean(y_fake))
-
-                self.optimizerD.zero_grad()
-                pen.backward(retain_graph=True)
-                loss_d.backward()
-                self.optimizerD.step()
-
-                fakez = torch.normal(mean=mean, std=std)
-                condvec = self.cond_generator.sample(self.batch_size)
-
-                if condvec is None:
-                    c1, m1, col, opt = None, None, None, None
-                else:
-                    c1, m1, col, opt = condvec
-                    c1 = torch.from_numpy(c1).to(self.device)
-                    m1 = torch.from_numpy(m1).to(self.device)
-                    fakez = torch.cat([fakez, c1], dim=1)
-
-                fake = self.generator(fakez)
-                fakeact = self._apply_activate(fake)
-
-                if c1 is not None:
-                    y_fake = self.discriminator(torch.cat([fakeact, c1], dim=1))
-                else:
-                    y_fake = self.discriminator(fakeact)
-
-                if condvec is None:
-                    cross_entropy = 0
-                else:
-                    cross_entropy = self._cond_loss(fake, c1, m1)
-
-                loss_g = -torch.mean(y_fake) + cross_entropy
-
-                self.optimizerG.zero_grad()
-                loss_g.backward()
-                self.optimizerG.step()
+                for _ in range(self.config.n_critic):
+                    loss_d = self.discriminator_train_step(torch.normal(mean=mean, std=std))
 
                 bar.postfix['g_loss'] = f'{loss_g.detach().cpu():6.3f}'
                 bar.postfix['d_loss'] = f'{loss_d.detach().cpu():6.3f}'
@@ -231,7 +231,7 @@ class GTABLESynthesizer(BaseSynthesizer):
         steps = n // self.batch_size + 1
         data = []
         for i in range(steps):
-            mean = torch.zeros(self.batch_size, self.embedding_dim)
+            mean = torch.zeros(self.batch_size, self.noise_dim)
             std = mean + 1
             fakez = torch.normal(mean=mean, std=std).to(self.device)
 
@@ -254,8 +254,7 @@ class GTABLESynthesizer(BaseSynthesizer):
         data = np.concatenate(data, axis=0)
         data = data[:n]
 
-        fake_data, org_fake_data = self.transformer.inverse_transform(data, None)
-        return org_fake_data
+        return self.transformer.inverse_transform(data, None)
 
     def save(self, path):
         assert hasattr(self, "generator")
@@ -278,15 +277,14 @@ class GTABLESynthesizer(BaseSynthesizer):
         if self.config.sample_condition_column is not None:
             assert self.config.sample_condition_column_value is not None
 
-        sampled = self.sample(
-            self.num_samples,
-            self.config.sample_condition_column,
-            self.config.sample_condition_column_value)
+        fake_data, org_fake_data = self.sample(self.num_samples,
+                                               self.config.sample_condition_column,
+                                               self.config.sample_condition_column_value)
 
         if self.config.tsv:
-            write_tsv(sampled, self.config.metadata, self.config.output)
+            write_tsv(org_fake_data, self.config.metadata, self.config.output)
         else:
-            sampled.to_csv(self.config.output, index=False)
+            org_fake_data.to_csv(self.config.output, index=False)
 
     @classmethod
     def load(cls, path):
