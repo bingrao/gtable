@@ -17,14 +17,25 @@ import torch
 
 
 class BaseSynthesizer:
-    """Base class for all default app of ``CTGAN``.
-
-    This should contain the save/load methods.
+    """Base class for all default app.
     """
     def __init__(self, ctx):
         self.context = ctx
         self.logging = self.context.logger
         self.config = self.context.config
+
+    def fit(self, data, categorical_columns=tuple(), ordinal_columns=tuple(), **kwargs):
+        raise NotImplementedError
+
+    def sample(self, num_samples, **kwargs):
+        raise NotImplementedError
+
+    def fit_then_sample(self, data, categorical_columns=tuple(), ordinal_columns=tuple()):
+        self.logging.info("Fitting %s", self.__class__.__name__)
+        self.fit(data, categorical_columns, ordinal_columns)
+
+        self.logging.info("Sampling %s", self.__class__.__name__)
+        return self.sample(data.shape[0])
 
     def save(self, path):
         device_backup = self._device

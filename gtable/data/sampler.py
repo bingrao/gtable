@@ -2,10 +2,14 @@ import numpy as np
 
 
 class Sampler(object):
-    """docstring for Sampler."""
+    def __init__(self):
+        pass
 
+
+class RandomSampler(Sampler):
+    """docstring for Sampler."""
     def __init__(self, data, output_info):
-        super(Sampler, self).__init__()
+        super(RandomSampler, self).__init__()
         self.data = data
         self.model = []
         self.n = len(data)

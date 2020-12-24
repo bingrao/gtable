@@ -63,10 +63,9 @@ def dataset_opts(parser):
     group.add('--attrib_num', '-attrib_num', type=int, default=0,
               help="The number of columns in the dataset. Used if the Classifer NN is active.")
 
-    # group.add('--data', '-data', required=False, default=None,
-    #           help='The input path prefix to the ".train.pkl". '
-    #                'If there is no data prefix provided, '
-    #                'system use real data path directly')
+    group.add('--data_type', '-data_type', default="csv",
+              choices=["csv", "tsv", "numpy", "json", "text"],
+              help="Type of the source input")
 
     group.add('--save_data', '-save_data', type=str, required=False, default=None,
               help="Output file for the prepared data")
@@ -74,12 +73,8 @@ def dataset_opts(parser):
     parser.add_argument('-t', '--tsv', action='store_true',
                         help='Load data in TSV format instead of CSV')
 
-    parser.add_argument('--no-header', dest='header', action='store_false',
+    parser.add_argument('--header', '-header', dest='header', action='store_false',
                         help='The CSV file has no header. Discrete columns will be indices.')
-
-    group.add('--data_type', '-data_type', default="csv",
-              choices=["text", "image", "csv", "vec", "code"],
-              help="Type of the source input")
 
     group.add('--sep', '-sep', type=str, default=',',
               help="The seperator symobl between two columns")
@@ -113,6 +108,12 @@ def dataset_opts(parser):
     group.add('--batch_size', '-batch_size', type=int, default=500,
               help='Maximum batch size for data generation')
 
+    group = parser.add_argument_group('Dataset Transformer')
+
+    group.add('--transformer_type', '-transformer_type', default="normal",
+              choices=["normal", "gmm"],
+              help="Type of the source input")
+
     group.add("--separated_embedding", "-separated_embedding", default=False, action="store_true",
               help="Enable to use seperated embedding way for each attributes")
 
@@ -124,11 +125,17 @@ def dataset_opts(parser):
               choices=['One_Hot_Vector'], default='One_Hot_Vector',
               help="The way to normalize the discrete dataset")
 
-    parser.add_argument('-d', '--discrete',
-                        help='Comma separated list of discrete columns, no whitespaces')
+    # parser.add_argument('-d', '--discrete',
+    #                     help='Comma separated list of discrete columns, no whitespaces')
 
     group.add('--embedding_combine', '-embedding_combine', type=str, choices=['matrix', 'vector'],
               default='matrix', help="The way to combine columns' embedding")
+
+    group.add('--n_clusters', '-n_clusters', type=int, default=10,
+              help='The number of clusters in GMM model')
+
+    group.add('--epsilon', '-epsilon', type=float, default=0.005,
+              help="")
 
 
 def model_opts(parser):

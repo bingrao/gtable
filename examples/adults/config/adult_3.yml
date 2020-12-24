@@ -1,5 +1,5 @@
 generation:
-  app: "CTGAN"
+  app: "TVAE"
   run_type: "generation"
   real_data: /home/forcebot/project/gtable/examples/adults/data/adult.csv
   metadata: /home/forcebot/project/gtable/examples/adults/data/adult.json
@@ -29,13 +29,13 @@ evaluate:
 #  fake_data: data/Civilian/tablegan_civilians_15000_notebook_fake.csv
 
   features_col: ['age', 'workclass', 'fnlwgt', 'education', 'education-num', 'marital-status',
-                 'occupation', 'relationship', 'race', 'sex', 'capital-gain', 'capital-loss',
-                 'hours-per-week', 'native-country']
-  target_col: 'income'
+                 'occupation', 'relationship', 'sex', 'capital-gain', 'capital-loss',
+                 'hours-per-week', 'native-country', 'income']
+  target_col: 'race'
 
-  classify_tasks: ['xgboost', 'logistic_regression', 'random_forest', 'decision_tree', 'mlp']
+#  classify_tasks: ['xgboost', 'logistic_regression', 'random_forest', 'decision_tree', 'mlp']
 #  classify_tasks: ['xgboost']
-  classify_scores: [ 'F1_Score', 'Recall_Score', 'Precision_Score']
+#  classify_scores: [ 'F1_Score', 'Recall_Score', 'Precision_Score']
 
 #  regression_tasks: ['random_forest_regr', 'lasso', 'ridge', 'elastic_net']
 #  regression_scores: ['mse', 'mae', 'mape', 'rmse']

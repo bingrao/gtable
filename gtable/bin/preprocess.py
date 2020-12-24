@@ -15,6 +15,7 @@
 
 from gtable.data.inputter import pickle_save
 from gtable.data.dataset import CSVDataset
+from gtable.data.dataset import get_data_loader
 
 
 class Preprocess:
@@ -23,21 +24,17 @@ class Preprocess:
         self.logging = ctx.logger
         self.config = ctx.config
 
-    def build_single_dataset(self, corpus_type, inputPath, isSave=True):
-        assert corpus_type == "train" or corpus_type == "eval" or corpus_type == "test"
-
-        self.logging.info(f"Build single {corpus_type} dataset: {inputPath}")
-
-        data = CSVDataset(self.context, corpus_type)
-        data.build_dataset(inputPath)
-
-        if isSave:
-            self.save_dataset(data, corpus_type)
-
-        return data
-
     def save_dataset(self, data, corpus_type):
         pickle_save(self.context, data, self.config.save_data + f'.{corpus_type}' + '.pkl')
 
     def run(self, inputPath, isSave=True):
-        return self.build_single_dataset("train", inputPath=inputPath, isSave=isSave)
+        data_loader = get_data_loader(self.context)
+
+        data = data_loader(inputPath)
+
+        if isSave:
+            self.save_dataset(data_loader, self.context.data_type)
+
+        return data_loader
+
+

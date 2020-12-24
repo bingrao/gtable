@@ -1,215 +1,187 @@
 from gtable.app.base import BaseSynthesizer
-import torch
 from torch import optim
 from torch.nn import functional
-
-from gtable.modules.ctgan import Discriminator, Generator, ConditionalGenerator
-from gtable.data.sampler import Sampler
-from gtable.data.inputter import read_csv, read_tsv, write_tsv
-import pickle
+from gtable.data.sampler import RandomSampler
+from gtable.data.inputter import write_tsv
+from gtable.data.transformer import build_transformer
+import torch
+from torch.nn import BatchNorm1d, Dropout, LeakyReLU, Linear, Module, ReLU, Sequential
 import numpy as np
-import pandas as pd
-from sklearn.exceptions import ConvergenceWarning
-from sklearn.mixture import BayesianGaussianMixture
-from sklearn.preprocessing import OneHotEncoder
-from sklearn.utils.testing import ignore_warnings
 
 
-class DataTransformer(object):
-    """Data Transformer.
+class Discriminator(Module):
 
-    Model continuous columns with a BayesianGMM and normalized to a scalar
-    [0, 1] and a vector.
-    Discrete columns are encoded using a scikit-learn OneHotEncoder.
+    def calc_gradient_penalty(self, real_data, fake_data, device='cpu', pac=10, lambda_=10):
 
-    Args:
-        n_cluster (int):
-            Number of modes.
-        epsilon (float):
-            Epsilon value.
-    """
+        alpha = torch.rand(real_data.size(0) // pac, 1, 1, device=device)
+        alpha = alpha.repeat(1, pac, real_data.size(1))
+        alpha = alpha.view(-1, real_data.size(1))
 
-    def __init__(self, n_clusters=10, epsilon=0.005):
-        self.n_clusters = n_clusters
-        self.epsilon = epsilon
+        interpolates = alpha * real_data + ((1 - alpha) * fake_data)
 
-    @ignore_warnings(category=ConvergenceWarning)
-    def _fit_continuous(self, column, data):
-        gm = BayesianGaussianMixture(
-            self.n_clusters,
-            weight_concentration_prior_type='dirichlet_process',
-            weight_concentration_prior=0.001,
-            n_init=1
-        )
-        gm.fit(data)
-        components = gm.weights_ > self.epsilon
-        num_components = components.sum()
+        disc_interpolates = self(interpolates)
 
-        return {
-            'name': column,
-            'model': gm,
-            'components': components,
-            'output_info': [(1, 'tanh'), (num_components, 'softmax')],
-            'output_dimensions': 1 + num_components,
-        }
+        gradients = torch.autograd.grad(
+            outputs=disc_interpolates, inputs=interpolates,
+            grad_outputs=torch.ones(disc_interpolates.size(), device=device),
+            create_graph=True, retain_graph=True, only_inputs=True
+        )[0]
 
-    def _fit_discrete(self, column, data):
-        ohe = OneHotEncoder(sparse=False)
-        ohe.fit(data)
-        categories = len(ohe.categories_[0])
+        gradient_penalty = ((
+            gradients.view(-1, pac * real_data.size(1)).norm(2, dim=1) - 1
+        ) ** 2).mean() * lambda_
 
-        return {
-            'name': column,
-            'encoder': ohe,
-            'output_info': [(categories, 'softmax')],
-            'output_dimensions': categories
-        }
+        return gradient_penalty
 
-    def fit(self, data, discrete_columns=tuple()):
-        self.output_info = []
-        self.output_dimensions = 0
+    def __init__(self, input_dim, dis_dims, pack=10):
+        super(Discriminator, self).__init__()
+        dim = input_dim * pack
+        self.pack = pack
+        self.packdim = dim
+        seq = []
+        for item in list(dis_dims):
+            seq += [Linear(dim, item), LeakyReLU(0.2), Dropout(0.5)]
+            dim = item
 
-        if not isinstance(data, pd.DataFrame):
-            self.dataframe = False
-            data = pd.DataFrame(data)
-        else:
-            self.dataframe = True
+        seq += [Linear(dim, 1)]
+        self.seq = Sequential(*seq)
 
-        self.dtypes = data.infer_objects().dtypes
-        self.meta = []
-        for column in data.columns:
-            column_data = data[[column]].values
-            if column in discrete_columns:
-                meta = self._fit_discrete(column, column_data)
-            else:
-                meta = self._fit_continuous(column, column_data)
+    def forward(self, x):
+        assert x.size()[0] % self.pack == 0
+        return self.seq(x.view(-1, self.packdim))
 
-            self.output_info += meta['output_info']
-            self.output_dimensions += meta['output_dimensions']
-            self.meta.append(meta)
 
-    def _transform_continuous(self, column_meta, data):
-        components = column_meta['components']
-        model = column_meta['model']
+class Residual(Module):
+    def __init__(self, i, o):
+        super(Residual, self).__init__()
+        self.fc = Linear(i, o)
+        self.bn = BatchNorm1d(o)
+        self.relu = ReLU()
 
-        means = model.means_.reshape((1, self.n_clusters))
-        stds = np.sqrt(model.covariances_).reshape((1, self.n_clusters))
-        features = (data - means) / (4 * stds)
+    def forward(self, x):
+        out = self.fc(x)
+        out = self.bn(out)
+        out = self.relu(out)
+        return torch.cat([out, x], dim=1)
 
-        probs = model.predict_proba(data)
 
-        n_opts = components.sum()
-        features = features[:, components]
-        probs = probs[:, components]
+class Generator(Module):
+    def __init__(self, embedding_dim, gen_dims, data_dim):
+        super(Generator, self).__init__()
+        dim = embedding_dim
+        seq = []
+        for item in list(gen_dims):
+            seq += [Residual(dim, item)]
+            dim += item
+        seq.append(Linear(dim, data_dim))
+        self.seq = Sequential(*seq)
 
-        opt_sel = np.zeros(len(data), dtype='int')
-        for i in range(len(data)):
-            pp = probs[i] + 1e-6
-            pp = pp / pp.sum()
-            opt_sel[i] = np.random.choice(np.arange(n_opts), p=pp)
+    def forward(self, x):
+        data = self.seq(x)
+        return data
 
-        idx = np.arange((len(features)))
-        features = features[idx, opt_sel].reshape([-1, 1])
-        features = np.clip(features, -.99, .99)
 
-        probs_onehot = np.zeros_like(probs)
-        probs_onehot[np.arange(len(probs)), opt_sel] = 1
-        return [features, probs_onehot]
+class ConditionalGenerator(object):
+    def __init__(self, data, output_info, log_frequency):
+        self.model = []
 
-    def _transform_discrete(self, column_meta, data):
-        encoder = column_meta['encoder']
-        return encoder.transform(data)
-
-    def transform(self, data):
-        if not isinstance(data, pd.DataFrame):
-            data = pd.DataFrame(data)
-
-        values = []
-        for meta in self.meta:
-            column_data = data[[meta['name']]].values
-            if 'model' in meta:
-                values += self._transform_continuous(meta, column_data)
-            else:
-                values.append(self._transform_discrete(meta, column_data))
-
-        return np.concatenate(values, axis=1).astype(float)
-
-    def _inverse_transform_continuous(self, meta, data, sigma):
-        model = meta['model']
-        components = meta['components']
-
-        u = data[:, 0]
-        v = data[:, 1:]
-
-        if sigma is not None:
-            u = np.random.normal(u, sigma)
-
-        u = np.clip(u, -1, 1)
-        v_t = np.ones((len(data), self.n_clusters)) * -100
-        v_t[:, components] = v
-        v = v_t
-        means = model.means_.reshape([-1])
-        stds = np.sqrt(model.covariances_).reshape([-1])
-        p_argmax = np.argmax(v, axis=1)
-        std_t = stds[p_argmax]
-        mean_t = means[p_argmax]
-        column = u * 4 * std_t + mean_t
-
-        return column
-
-    def _inverse_transform_discrete(self, meta, data):
-        encoder = meta['encoder']
-        return encoder.inverse_transform(data)
-
-    def inverse_transform(self, data, sigmas):  # (15000, 126)
         start = 0
-        output = []
-        column_names = []
-        for meta in self.meta:
-            dimensions = meta['output_dimensions']
-            columns_data = data[:, start:start + dimensions]
+        skip = False
+        max_interval = 0
+        counter = 0
+        for item in output_info:
+            if item[1] == 'tanh':
+                start += item[0]
+                skip = True
+                continue
 
-            if 'model' in meta:
-                sigma = sigmas[start] if sigmas else None
-                inverted = self._inverse_transform_continuous(meta, columns_data, sigma)
+            elif item[1] == 'softmax':
+                if skip:
+                    skip = False
+                    start += item[0]
+                    continue
+
+                end = start + item[0]
+                max_interval = max(max_interval, end - start)
+                counter += 1
+                self.model.append(np.argmax(data[:, start:end], axis=-1))
+                start = end
+
             else:
-                inverted = self._inverse_transform_discrete(meta, columns_data)
+                assert 0
 
-            output.append(inverted)
-            column_names.append(meta['name'])
-            start += dimensions
+        assert start == data.shape[1]
 
-        output = np.column_stack(output)
-        output = pd.DataFrame(output, columns=column_names).astype(self.dtypes)
-        if not self.dataframe:
-            output = output.values
+        self.interval = []
+        self.n_col = 0
+        self.n_opt = 0
+        skip = False
+        start = 0
+        self.p = np.zeros((counter, max_interval))
+        for item in output_info:
+            if item[1] == 'tanh':
+                skip = True
+                start += item[0]
+                continue
+            elif item[1] == 'softmax':
+                if skip:
+                    start += item[0]
+                    skip = False
+                    continue
+                end = start + item[0]
+                tmp = np.sum(data[:, start:end], axis=0)
+                if log_frequency:
+                    tmp = np.log(tmp + 1)
+                tmp = tmp / np.sum(tmp)
+                self.p[self.n_col, :item[0]] = tmp
+                self.interval.append((self.n_opt, item[0]))
+                self.n_opt += item[0]
+                self.n_col += 1
+                start = end
+            else:
+                assert 0
 
-        return output
+        self.interval = np.asarray(self.interval)
 
-    def save(self, path):
-        with open(path + "/data_transform.pl", "wb") as f:
-            pickle.dump(self, f)
+    def random_choice_prob_index(self, idx):
+        a = self.p[idx]
+        r = np.expand_dims(np.random.rand(a.shape[0]), axis=1)
+        return (a.cumsum(axis=1) > r).argmax(axis=1)
 
-    def covert_column_name_value_to_id(self, column_name, value):
-        discrete_counter = 0
-        column_id = 0
-        for info in self.meta:
-            if info["name"] == column_name:
-                break
-            if len(info["output_info"]) == 1:  # is discrete column
-                discrete_counter += 1
-            column_id += 1
+    def sample(self, batch):
+        if self.n_col == 0:
+            return None
 
-        return {
-            "discrete_column_id": discrete_counter,
-            "column_id": column_id,
-            "value_id": np.argmax(info["encoder"].transform([[value]])[0])
-        }
+        batch = batch
+        idx = np.random.choice(np.arange(self.n_col), batch)
 
-    @classmethod
-    def load(cls, path):
-        with open(path + "/data_transform.pl", "rb") as f:
-            return pickle.load(f)
+        vec1 = np.zeros((batch, self.n_opt), dtype='float32')
+        mask1 = np.zeros((batch, self.n_col), dtype='float32')
+        mask1[np.arange(batch), idx] = 1
+        opt1prime = self.random_choice_prob_index(idx)
+        opt1 = self.interval[idx, 0] + opt1prime
+        vec1[np.arange(batch), opt1] = 1
+
+        return vec1, mask1, idx, opt1prime
+
+    def sample_zero(self, batch):
+        if self.n_col == 0:
+            return None
+
+        vec = np.zeros((batch, self.n_opt), dtype='float32')
+        idx = np.random.choice(np.arange(self.n_col), batch)
+        for i in range(batch):
+            col = idx[i]
+            pick = int(np.random.choice(self.model[col]))
+            vec[i, pick + self.interval[col, 0]] = 1
+
+        return vec
+
+    def generate_cond_from_condition_column_info(self, condition_info, batch):
+        vec = np.zeros((batch, self.n_opt), dtype='float32')
+        ind = self.interval[condition_info["discrete_column_id"]][0] + condition_info["value_id"]
+        vec[:, ind] = 1
+        return vec
 
 
 class CTGANSynthesizer(BaseSynthesizer):
@@ -299,18 +271,20 @@ class CTGANSynthesizer(BaseSynthesizer):
 
         return (loss * m).sum() / data.size()[0]
 
-    def fit(self, train_data, discrete_columns=tuple(), epochs=300, log_frequency=True):
+    def fit(self, dataset, categorical_columns=tuple(), ordinal_columns=tuple(),
+            epochs=300, log_frequency=True):
         """Fit the CTGAN Synthesizer models to the training data.
 
         Args:
-            train_data (numpy.ndarray or pandas.DataFrame):
+            data (numpy.ndarray or pandas.DataFrame):
                 Training Data. It must be a 2-dimensional numpy array or a
                 pandas.DataFrame.
-            discrete_columns (list-like):
+            categorical_columns (list-like):
                 List of discrete columns to be used to generate the Conditional
-                Vector. If ``train_data`` is a Numpy array, this list should
+                Vector. If ``data`` is a Numpy array, this list should
                 contain the integer indices of the columns. Otherwise, if it is
                 a ``pandas.DataFrame``, this list should contain the column names.
+            ordinal_columns:
             epochs (int):
                 Number of training epochs. Defaults to 300.
             log_frequency (boolean):
@@ -318,18 +292,17 @@ class CTGANSynthesizer(BaseSynthesizer):
                 sampling. Defaults to ``True``.
         """
 
-        if not hasattr(self, "transformer"):
-            self.transformer = DataTransformer()
-            self.transformer.fit(train_data, discrete_columns)
-        train_data = self.transformer.transform(train_data)
+        self.transformer = dataset.transformer
 
-        data_sampler = Sampler(train_data, self.transformer.output_info)
+        data = dataset.X
+
+        data_sampler = RandomSampler(data, self.transformer.output_info)
 
         data_dim = self.transformer.output_dimensions
 
         if not hasattr(self, "cond_generator"):
             self.cond_generator = ConditionalGenerator(
-                train_data,
+                data,
                 self.transformer.output_info,
                 log_frequency
             )
@@ -361,7 +334,7 @@ class CTGANSynthesizer(BaseSynthesizer):
         mean = torch.zeros(self.batch_size, self.embedding_dim, device=self.device)
         std = mean + 1
 
-        steps_per_epoch = max(len(train_data) // self.batch_size, 1)
+        steps_per_epoch = max(len(data) // self.batch_size, 1)
         for i in range(epochs):
             self.trained_epoches += 1
             for id_ in range(steps_per_epoch):
@@ -436,16 +409,18 @@ class CTGANSynthesizer(BaseSynthesizer):
                 loss_g.backward()
                 self.optimizerG.step()
 
-            print("Epoch %d, Loss G: %.4f, Loss D: %.4f" %
-                  (self.trained_epoches, loss_g.detach().cpu(), loss_d.detach().cpu()),
+            print("Epoch %d / %d, Loss D: %.4f, Loss G: %.4f" %
+                  (self.trained_epoches, epochs, loss_d.detach().cpu(), loss_g.detach().cpu()),
                   flush=True)
 
-    def sample(self, n, condition_column=None, condition_value=None):
+    def sample(self, num_samples, condition_column=None, condition_value=None):
         """Sample data similar to the training data.
 
         Args:
-            n (int):
+            num_samples (int):
                 Number of rows to sample.
+            condition_column:
+            condition_value:
 
         Returns:
             numpy.ndarray or pandas.DataFrame
@@ -459,7 +434,7 @@ class CTGANSynthesizer(BaseSynthesizer):
         else:
             global_condition_vec = None
 
-        steps = n // self.batch_size + 1
+        steps = num_samples // self.batch_size + 1
         data = []
         for i in range(steps):
             mean = torch.zeros(self.batch_size, self.embedding_dim)
@@ -483,7 +458,7 @@ class CTGANSynthesizer(BaseSynthesizer):
             data.append(fakeact.detach().cpu().numpy())
 
         data = np.concatenate(data, axis=0)
-        data = data[:n]
+        data = data[:num_samples]
 
         return self.transformer.inverse_transform(data, None)
 
@@ -513,26 +488,13 @@ class CTGANSynthesizer(BaseSynthesizer):
         return model
 
     def run(self, dataset=None):
-        if self.config.tsv:
-            data, discrete_columns = read_tsv(self.config.real_data,
-                                              self.config.metadata)
-        else:
-            data, discrete_columns = read_csv(self.config.real_data,
-                                              self.config.metadata,
-                                              self.config.header,
-                                              self.config.discrete)
 
-        # if self.config.load:
-        #     model = self.load(self.config.load)
-        # else:
-        #     model = CTGANSynthesizer()
-
-        self.fit(data, discrete_columns, self.config.epoch)
+        self.fit(dataset, epochs=self.config.epochs)
 
         if self.config.save is not None:
             self.save(self.config.save)
 
-        num_samples = self.config.num_samples or len(data)
+        num_samples = self.config.num_samples or len(dataset.X)
 
         if self.config.sample_condition_column is not None:
             assert self.config.sample_condition_column_value is not None
