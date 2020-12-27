@@ -14,6 +14,7 @@
 # limitations under the License.
 
 import torch
+from gtable.utils.evaluate import compute_scores
 
 
 class BaseSynthesizer:
@@ -24,18 +25,18 @@ class BaseSynthesizer:
         self.logging = self.context.logger
         self.config = self.context.config
 
-    def fit(self, data, categorical_columns=tuple(), ordinal_columns=tuple(), **kwargs):
+    def fit(self, dataset, categorical_columns=tuple(), ordinal_columns=tuple(), **kwargs):
         raise NotImplementedError
 
     def sample(self, num_samples, **kwargs):
         raise NotImplementedError
 
-    def fit_then_sample(self, data, categorical_columns=tuple(), ordinal_columns=tuple()):
+    def fit_then_sample(self, dataset, categorical_columns=tuple(), ordinal_columns=tuple()):
         self.logging.info("Fitting %s", self.__class__.__name__)
-        self.fit(data, categorical_columns, ordinal_columns)
+        self.fit(dataset, categorical_columns, ordinal_columns)
 
         self.logging.info("Sampling %s", self.__class__.__name__)
-        return self.sample(data.shape[0])
+        return self.sample(dataset.num_train_dataset)
 
     def save(self, path):
         device_backup = self._device
@@ -53,3 +54,10 @@ class BaseSynthesizer:
     @classmethod
     def from_contex(cls, ctx):
         return cls(ctx)
+
+    def __call__(self, dataset):
+        fake_dataset = self.fit_then_sample(dataset)
+
+        self.logging.info("Evaluation %s", self.__class__.__name__)
+        scores = compute_scores(dataset, fake_dataset)
+        self.logging.info(f"Score: \n {scores}")

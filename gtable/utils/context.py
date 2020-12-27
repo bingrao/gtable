@@ -100,12 +100,13 @@ class Context:
 
         self.real_data = self.config.real_data
         self.fake_data = self.config.fake_data
-        self.save_data = self.config.save_data
-
+        self.metadata = self.config.metadata
         self.data_type = self.config.data_type
+        self.output = self.config.output
+        self.num_samples = self.config.num_samples
+        self.features_col = self.config.features_col
+        self.target_col = self.config.target_col
+
         self.sep = self.config.sep
         self.drop = [] if self.config.drop is None else self.config.drop
         self.cat_cols = [] if self.config.cat_cols is None else self.config.cat_cols
-        self.features_col = self.config.features_col
-        self.target_col = self.config.target_col
-        self.n_samples = self.config.num_samples

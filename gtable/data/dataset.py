@@ -1,9 +1,47 @@
 from gtable.data.inputter import read_csv
+from gtable.utils.misc import ClassRegistry
+from gtable.data.transformer import build_transformer
+from gtable.utils.constants import CATEGORICAL, ORDINAL
+from gtable.data.inputter import get_metadata, _get_columns, pickle_load, pickle_save
 import numpy as np
 import pandas as pd
-from gtable.utils.misc import ClassRegistry
+import urllib
+import json
 import abc
-from gtable.data.transformer import build_transformer
+import os
+
+BASE_URL = 'http://sdgym.s3.amazonaws.com/datasets/'
+DATA_PATH = os.path.join(os.path.dirname(__file__), 'data')
+
+
+def _load_json(path):
+    with open(path) as json_file:
+        return json.load(json_file)
+
+
+def _load_file(filename, loader):
+    local_path = os.path.join(DATA_PATH, filename)
+    if not os.path.exists(local_path):
+        os.makedirs(DATA_PATH, exist_ok=True)
+        url = BASE_URL + filename
+
+        urllib.request.urlretrieve(url, local_path)
+
+    return loader(local_path)
+
+
+def load_dataset(name, benchmark=False):
+    # LOGGER.info('Loading dataset %s', name)
+    data = _load_file(name + '.npz', np.load)
+    meta = _load_file(name + '.json', _load_json)
+
+    categorical_columns, ordinal_columns = _get_columns(meta)
+
+    train = data['train']
+    if benchmark:
+        return train, data['test'], meta, categorical_columns, ordinal_columns
+
+    return train, categorical_columns, ordinal_columns
 
 
 class Dataset(abc.ABC):
@@ -11,18 +49,18 @@ class Dataset(abc.ABC):
         self.context = ctx
         self.config = ctx.config
         self.logging = ctx.logger
-
         self._name = name
 
-        self.dataset = None  # pd.DataFrame
-        self.name_columns = None
-        self.num_columns = 1
-        self.dtype = None
-        self.numerical_cols = None
-        self.categorial_cols = None
-        self.num_samples = 0
+        self.train_dataset = None  # Numpy format original dataset
+        self.train_metadata = None
+        self.num_train_dataset = 0
 
-        self.metadata = {}
+        self.test_dataset = None  # Numpy format original dataset
+        self.test_metadata = None
+        self.num_test_dataset = 0
+
+        self.transformer = None
+
         self.random_seed = self.config.seed
         self.unique_thresh = self.config.unique_thresh
 
@@ -30,72 +68,47 @@ class Dataset(abc.ABC):
         self.target_col = self.config.target_col
         self.features_col = self.config.features_col
 
-        self.X = None  # Numpy array
-        self.y = None  # Numpy array
-
-        self.transformer = build_transformer(self.context)
-
     @property
     def name(self):
         return self._name
 
-    def set_transformer(self, transformer):
-        self.transformer = transformer
-
-    @property
-    def get_transformer(self):
-        return self.transformer
-
-    @property
-    def get_dataset(self):
-        return self.dataset
-
-    def load(self, inputPath: str) -> pd.DataFrame:
+    def load(self, inputPath: str):
         """
         Loading dataset from file system and convert it a DataFrme
         :return:
         """
         raise NotImplementedError
 
+    def save(self, data, metadata, outputPath):
+        pickle_save(self.context, {"data": data, "metadata": metadata}, outputPath)
+
     def preprocess(self):
         raise NotImplementedError
 
-    def fit(self):
-        dataset = self.dataset.copy()
-        if self.target_col is not None:
-            self.transformer.fit(dataset.drop([self.target_col], axis=1),
-                            self.categorial_cols, self.metadata)
-        else:
-            self.transformer.fit(dataset, self.categorial_cols, self.metadata)
-
-    def transform(self):
-        if not self.transformer.is_trained:
-            self.fit()
-
-        dataset = self.dataset.copy()
-
-        # Normalizing Initial Data
-        self.logging.info("Transforming each column into a numberial or one-hot vector")
-        if self.target_col is not None:
-            self.metadata['colums_name']['label'].drop([self.target_col])
-            self.X = self.transformer.transform(dataset.drop([self.target_col], axis=1))
-            self.y = np.array(dataset.pop(self.target_col))
-        else:
-            self.X = self.transformer.transform(dataset)
-            self.y = np.ones(self.num_samples)
-
-        return self.X, self.y
-
-    def __call__(self, inputPath: str):
+    def __call__(self, inputPath: str, metadata):
         # loading dataset as DataFrame
-        self.load(inputPath)
+
+        self.metadata = metadata
+
+        self.train_dataset, self.test_dataset = self.load(inputPath)
+        self.num_train_dataset = len(self.train_dataset)
+        self.num_test_dataset = len(self.test_dataset)
+
+        self.train_metadata = get_metadata(self.train_dataset, self.metadata)
+
+        self.test_metadata = get_metadata(self.test_dataset, self.metadata)
+
+        self.transformer = build_transformer(self.context, self.metadata)
+
+        self.name_columns = list(map(lambda item: item['name'], metadata['columns']))
+        self.num_columns = len(self.name_columns)
+
+
 
         # Data clean
         self.preprocess()
 
-        # Normalizing the dataset
-        self.transform()
-        return self.dataset
+        return self
 
 
 _DATASET_REGISTRY = ClassRegistry(base_class=Dataset)
@@ -144,7 +157,7 @@ class CSVDataset(Dataset):
 
         # fill N/A with mean values for numerical columns
         self.dataset.loc[:, self.numerical_cols] = \
-            self.dataset.loc[:, self.numerical_cols]\
+            self.dataset.loc[:, self.numerical_cols] \
                 .fillna(self.dataset[self.numerical_cols].mean())
 
         # Convert categorial colums to ordinal repsentations.
@@ -174,8 +187,9 @@ class NumpyDataset(Dataset):
     def __init__(self, ctx, name):
         super(NumpyDataset, self).__init__(ctx, name)
 
-    def load(self, inputPath: str) -> pd.DataFrame:
-        pass
+    def load(self, inputPath: str):
+        dataset = np.load(inputPath)
+        return dataset['train'], dataset['test']
 
     def preprocess(self):
         pass
@@ -185,6 +199,18 @@ class NumpyDataset(Dataset):
 class JsonDataset(Dataset):
     def __init__(self, ctx, name):
         super(JsonDataset, self).__init__(ctx, name)
+
+    def load(self, inputPath: str) -> pd.DataFrame:
+        pass
+
+    def preprocess(self):
+        pass
+
+
+@register_dataset(name="pickles")
+class PickleDataset(Dataset):
+    def __init__(self, ctx, name):
+        super(PickleDataset, self).__init__(ctx, name)
 
     def load(self, inputPath: str) -> pd.DataFrame:
         pass

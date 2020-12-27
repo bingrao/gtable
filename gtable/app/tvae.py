@@ -76,7 +76,13 @@ class TVAESynthesizer(BaseSynthesizer):
 
     def fit(self, dataset, categorical_columns=tuple(), ordinal_columns=tuple(), **kwargs):
         self.transformer = dataset.transformer
-        data = dataset.X
+
+        self.transformer.fit(dataset.train_dataset)
+
+        # numpy array [nums_samples, dim] (32561, 157)
+        data = self.transformer.transform(dataset.train_dataset)
+
+        self.num_samples = len(data)
 
         dataset = TensorDataset(torch.from_numpy(data.astype('float32')).to(self._device))
         loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True, drop_last=True)
@@ -134,9 +140,7 @@ class TVAESynthesizer(BaseSynthesizer):
         if self.config.save is not None:
             self.save(self.config.save)
 
-        num_samples = self.config.num_samples or len(dataset.X)
-
-        sampled = self.sample(num_samples)
+        sampled = self.sample(self.num_samples)
 
         if self.config.tsv:
             write_tsv(sampled, self.config.metadata, self.config.output)

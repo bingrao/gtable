@@ -23,7 +23,8 @@ def config_opts(parser):
     group.add('--config', '-config', required=False,
               is_config_file_arg=True, help='config file path')
 
-    group.add('--app', '-app', type=str, choices=["CTGAN", "TVAE", "GTABLE"], default="CTGAN",
+    group.add('--app', '-app', type=str, choices=["CTGAN", "TVAE", "GTABLE", "TABLEGAN"],
+              default="CTGAN",
               help="The type of application to generate synthetic data")
 
     group.add('--run_type', '-run_type', type=str, default='generation', required=False,
@@ -60,15 +61,26 @@ def dataset_opts(parser):
     group.add('--fake_data', '-fake_data', type=str, required=False, default=None,
               help="The path of fake dataset")
 
-    group.add('--attrib_num', '-attrib_num', type=int, default=0,
-              help="The number of columns in the dataset. Used if the Classifer NN is active.")
+    group.add('--metadata', '-metadata', type=str, default=None,
+              help="The path for metadata of the input file")
 
     group.add('--data_type', '-data_type', default="csv",
               choices=["csv", "tsv", "numpy", "json", "text"],
               help="Type of the source input")
 
-    group.add('--save_data', '-save_data', type=str, required=False, default=None,
-              help="Output file for the prepared data")
+    group.add('--output', '-output', type=str, required=False,
+              help="The output of generation model")
+
+    group.add('--num_samples', '-num_samples', type=int, default=None,
+              help='Number of samples to evaluate or generate. If none, '
+                   'it will take the minimal length of both datasets and cut '
+                   'the larger one off to make sure they are the same length.')
+
+    group.add('--attrib_num', '-attrib_num', type=int, default=0,
+              help="The number of columns in the dataset. Used if the Classifer NN is active.")
+
+    # group.add('--save_data', '-save_data', type=str, required=False, default=None,
+    #           help="Output file for the prepared data")
 
     parser.add_argument('-t', '--tsv', action='store_true',
                         help='Load data in TSV format instead of CSV')
@@ -88,22 +100,11 @@ def dataset_opts(parser):
     group.add('--features_col', '-features_col', type=str, nargs='+', default=None,
               help="The features of input for classification or regression tasks")
 
-    group.add('--unique_thresh', '-unique_thresh', type=int, default=0,
-              help='Threshold for automatic evaluation if column is numeric')
-
     group.add('--target_col', '-target_col', type=str, default=None,
               help="The y label for classification or regression tasks")
 
-    group.add('--num_samples', '-num_samples', type=int, default=None,
-              help='Number of samples to evaluate or generate. If none, '
-                   'it will take the minimal length of both datasets and cut '
-                   'the larger one off to make sure they are the same length.')
-
-    group.add('--output', '-output', type=str, required=False,
-              help="The output of generation model")
-
-    group.add('--metadata', '-metadata', type=str, default=None,
-              help="The path for metadata of the input file")
+    group.add('--unique_thresh', '-unique_thresh', type=int, default=0,
+              help='Threshold for automatic evaluation if column is numeric')
 
     group.add('--batch_size', '-batch_size', type=int, default=500,
               help='Maximum batch size for data generation')
@@ -111,19 +112,25 @@ def dataset_opts(parser):
     group = parser.add_argument_group('Dataset Transformer')
 
     group.add('--transformer_type', '-transformer_type', default="normal",
-              choices=["normal", "gmm"],
+              choices=["general", "gmm", "tablegan", "bgm"],
               help="Type of the source input")
 
-    group.add("--separated_embedding", "-separated_embedding", default=False, action="store_true",
-              help="Enable to use seperated embedding way for each attributes")
+    group.add("--unify_embedding", "-unify_embedding", type=str, default=None,
+              choices=['Bayesian_Gaussian_Norm', 'Gaussian_Norm', 'MinMax_Norm', 'One_Hot'],
+              help="Enable to use a identifical and unified embedding way for "
+                   "each attributes.")
 
-    group.add('--continuous_embeddding', '-continuous_embeddding', type=str,
-              choices=['Bayesian_Gaussian_Norm', 'Standard_Norm'], default='Standard_Norm',
-              help="The way to normalize the continuous dataset")
+    group.add('--numerical_embeddding', '-numerical_embeddding', type=str, default=None,
+              choices=['Bayesian_Gaussian_Norm', 'Gaussian_Norm', 'MinMax_Norm'],
+              help="The way to normalize the numerical dataset")
 
-    group.add('--discrete_embeddding', '-discrete_embeddding', type=str,
-              choices=['One_Hot_Vector'], default='One_Hot_Vector',
-              help="The way to normalize the discrete dataset")
+    group.add('--categorial_embeddding', '-categorial_embeddding', type=str,
+              choices=['One_Hot'], default='One_Hot',
+              help="The way to normalize the categorial discrete dataset")
+
+    group.add('--ordinal_embeddding', '-ordinal_embeddding', type=str,
+              choices=['One_Hot'], default='One_Hot',
+              help="The way to normalize the ordinal discrete dataset")
 
     # parser.add_argument('-d', '--discrete',
     #                     help='Comma separated list of discrete columns, no whitespaces')
@@ -136,6 +143,9 @@ def dataset_opts(parser):
 
     group.add('--epsilon', '-epsilon', type=float, default=0.005,
               help="")
+
+    group.add("--num_channels", "-num_channels", type=int, default=64,
+              help="The number of channels for tablegan")
 
 
 def model_opts(parser):

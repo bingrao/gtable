@@ -3,10 +3,10 @@ from torch import optim
 from torch.nn import functional
 from gtable.data.sampler import RandomSampler
 from gtable.data.inputter import write_tsv
-from gtable.data.transformer import build_transformer
 import torch
 from torch.nn import BatchNorm1d, Dropout, LeakyReLU, Linear, Module, ReLU, Sequential
 import numpy as np
+from gtable.utils.evaluate import compute_scores
 
 
 class Discriminator(Module):
@@ -271,8 +271,7 @@ class CTGANSynthesizer(BaseSynthesizer):
 
         return (loss * m).sum() / data.size()[0]
 
-    def fit(self, dataset, categorical_columns=tuple(), ordinal_columns=tuple(),
-            epochs=300, log_frequency=True):
+    def fit(self, dataset, categorical_columns=tuple(), ordinal_columns=tuple(), **kwargs):
         """Fit the CTGAN Synthesizer models to the training data.
 
         Args:
@@ -291,10 +290,15 @@ class CTGANSynthesizer(BaseSynthesizer):
                 Whether to use log frequency of categorical levels in conditional
                 sampling. Defaults to ``True``.
         """
+        epochs = self.config.epochs
+        log_frequency = True
 
         self.transformer = dataset.transformer
 
-        data = dataset.X
+        self.transformer.fit(dataset.train_dataset)
+        data = self.transformer.transform(dataset.train_dataset)
+
+        self.num_samples = len(data)
 
         data_sampler = RandomSampler(data, self.transformer.output_info)
 
@@ -413,18 +417,22 @@ class CTGANSynthesizer(BaseSynthesizer):
                   (self.trained_epoches, epochs, loss_d.detach().cpu(), loss_g.detach().cpu()),
                   flush=True)
 
-    def sample(self, num_samples, condition_column=None, condition_value=None):
+    def sample(self, num_samples, **kwargs):
         """Sample data similar to the training data.
 
         Args:
             num_samples (int):
                 Number of rows to sample.
-            condition_column:
-            condition_value:
 
         Returns:
             numpy.ndarray or pandas.DataFrame
         """
+
+        if self.config.sample_condition_column is not None:
+            assert self.config.sample_condition_column_value is not None
+
+        condition_column = self.config.sample_condition_column,
+        condition_value = self.config.sample_condition_column_value
 
         if condition_column is not None and condition_value is not None:
             condition_info = self.transformer.covert_column_name_value_to_id(
@@ -489,20 +497,11 @@ class CTGANSynthesizer(BaseSynthesizer):
 
     def run(self, dataset=None):
 
-        self.fit(dataset, epochs=self.config.epochs)
+        self.fit(dataset)
 
-        if self.config.save is not None:
-            self.save(self.config.save)
+        sampled = self.sample(self.num_samples)
 
-        num_samples = self.config.num_samples or len(dataset.X)
-
-        if self.config.sample_condition_column is not None:
-            assert self.config.sample_condition_column_value is not None
-
-        sampled = self.sample(
-            num_samples,
-            self.config.sample_condition_column,
-            self.config.sample_condition_column_value)
+        scores = compute_scores(dataset, sampled)
 
         if self.config.tsv:
             write_tsv(sampled, self.config.metadata, self.config.output)

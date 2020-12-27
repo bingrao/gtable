@@ -3,6 +3,61 @@ from typing import List, Tuple
 import numpy as np
 import pandas as pd
 import pickle
+from gtable.utils.constants import CATEGORICAL, ORDINAL, NUMERICAL
+
+
+def _get_columns(metadata):
+    categorical_columns = list()
+    ordinal_columns = list()
+    for column_idx, column in enumerate(metadata['columns']):
+        if column['type'] == CATEGORICAL:
+            categorical_columns.append(column_idx)
+        elif column['type'] == ORDINAL:
+            ordinal_columns.append(column_idx)
+
+    return categorical_columns, ordinal_columns
+
+
+def get_metadata(data, metadata):
+    meta = []
+
+    df = pd.DataFrame(data)
+    for index, item in enumerate(metadata['columns']):
+        column = df[index]
+        if item['type'] == CATEGORICAL:
+
+            mapper = item['i2s'] if 'i2s' in item else column.value_counts().index.tolist()
+            meta.append({
+                "name": item['name'],
+                "index": index,
+                "type": CATEGORICAL,
+                "size": len(mapper),
+                "i2s": mapper
+            })
+        elif item['type'] == ORDINAL:
+            if "i2s" in item:
+                mapper = item['i2s']
+            else:
+                value_count = list(dict(column.value_counts()).items())
+                value_count = sorted(value_count, key=lambda x: -x[1])
+                mapper = list(map(lambda x: x[0], value_count))
+            meta.append({
+                "name": item['name'],
+                "index": index,
+                "type": ORDINAL,
+                "size": len(mapper),
+                "i2s": mapper
+            })
+        else:
+            meta.append({
+                "name": item['name'],
+                "index": index,
+                "type": NUMERICAL,
+                "min": column.min(),
+                "max": column.max(),
+            })
+
+    return {"columns": meta}
 
 
 def category_to_number(df, cat_names=[]):

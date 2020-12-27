@@ -422,7 +422,7 @@ class GTABLESynthesizer(BaseSynthesizer):
 
         return (loss * m).sum() / data.size()[0]
 
-    def sample(self, num_samples, condition_column=None, condition_value=None):
+    def sample(self, num_samples, **kwargs):
         """Sample data similar to the training data.
 
         Args:
@@ -433,6 +433,12 @@ class GTABLESynthesizer(BaseSynthesizer):
         Returns:
             numpy.ndarray or pandas.DataFrame
         """
+
+        if self.config.sample_condition_column is not None:
+            assert self.config.sample_condition_column_value is not None
+
+        condition_column = self.config.sample_condition_column
+        condition_value = self.config.sample_condition_column_value
 
         if condition_column is not None and condition_value is not None:
             condition_info = self.transformer.covert_column_name_value_to_id(
@@ -498,10 +504,12 @@ class GTABLESynthesizer(BaseSynthesizer):
     def fit(self, dataset, categorical_columns=tuple(), ordinal_columns=tuple(), **kwargs):
         self.transformer = dataset.transformer
 
-        # numpy array [nums_samples, dim] (32561, 157)
-        self.train_data = dataset.X
+        self.transformer.fit(dataset.train_dataset)
 
-        self.num_samples = dataset.num_samples
+        # numpy array [nums_samples, dim] (32561, 157)
+        self.train_data = self.transformer.transform(dataset.train_dataset)
+
+        self.num_samples = len(self.train_data)
 
         self.data_dim = self.transformer.output_dimensions
 
@@ -514,15 +522,5 @@ class GTABLESynthesizer(BaseSynthesizer):
 
         self.fit(dataset)
 
-        if self.config.sample_condition_column is not None:
-            assert self.config.sample_condition_column_value is not None
-
-        fake_data, org_fake_data = self.sample(self.num_samples,
-                                               self.config.sample_condition_column,
-                                               self.config.sample_condition_column_value)
-
-        if self.config.tsv:
-            write_tsv(org_fake_data, self.config.metadata, self.config.output)
-        else:
-            org_fake_data.to_csv(self.config.output, index=False)
-
+        fake_data = self.sample(self.num_samples)
+        fake_data.to_csv(self.config.output)

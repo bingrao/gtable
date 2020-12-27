@@ -15,10 +15,10 @@
 
 """Main library entrypoint."""
 from gtable.evaluator import DataEvaluator
-from gtable.bin.preprocess import Preprocess
-from gtable.data.inputter import pickle_load
+from gtable.data.dataset import get_data_loader
 from gtable.app import str2app
 from os.path import exists
+import json
 import os
 
 
@@ -56,14 +56,16 @@ class Runner(object):
         self.config = self.context.config
         self.logging = self.context.logger
         self.run_type = self.config.run_type
-        self._model = None
-        self._preprocess = None
-        self._evaluator = None
+
         self.real_dataset = None
         self.fake_dataset = None
+        self.metadata = None
+
+        self._model = None
+        self._evaluator = None
 
         # Before runing, we need load the datasets and transformed them if possible
-        self.load_dataset()
+        self.preprocess()
 
         if self.run_type == "generation":
             self._model = build_app(self.context)
@@ -80,28 +82,22 @@ class Runner(object):
         """The active model directory."""
         return self.model.checkpoint_dir
 
-    def load_dataset(self):
+    def preprocess(self):
+        if self.context.metadata is not None and os.path.exists(self.context.metadata):
+            with open(self.context.metadata) as meta_file:
+                self.metadata = json.load(meta_file)
+
         if self.context.real_data is not None and os.path.exists(self.context.real_data):
             self.logging.info(f"Loading real dataset: {self.context.real_data} ...")
-            if self._preprocess is None:
-                self._preprocess = Preprocess(self.context)
-            self.real_dataset = self._preprocess.run(inputPath=self.context.real_data,
-                                                     isSave=False)
-        else:
-            data_path = self.context.save_data + '.train.pkl'
-            if os.path.exists(data_path):
-                self.logging.info(f"Loading prepared train datasets: {data_path}")
-                self.real_dataset = pickle_load(self.context, data_path)
-            else:
-                self.logging.info(f"The input data does not exist: {data_path}")
-                self.real_dataset = None
+            self.real_dataset = self.load_dataset(self.context.real_data, self.metadata)
 
         if self.context.fake_data is not None and os.path.exists(self.context.fake_data):
             self.logging.info(f"Loading fake dataset: {self.context.fake_data} ...")
-            if self._preprocess is None:
-                self._preprocess = Preprocess(self.context)
-            self.fake_dataset = self._preprocess.run(inputPath=self.context.fake_data,
-                                                     isSave=False)
+            self.fake_data = self.load_dataset(self.context.fake_data, self.metadata)
+
+    def load_dataset(self, path, metadata):
+        data_loader = get_data_loader(self.context)
+        return data_loader(path, metadata)
 
     def evaluate(self):
         """
@@ -115,7 +111,7 @@ class Runner(object):
         Using trained model to generate anonmymous data
         :return:
         """
-        self.model.run(self.real_dataset)
+        self.model(self.real_dataset)
 
     def run(self):
         if self.run_type == "generation":

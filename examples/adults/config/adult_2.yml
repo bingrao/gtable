@@ -1,28 +1,30 @@
 generation:
   app: "CTGAN"
   run_type: "generation"
-  real_data: /home/forcebot/project/gtable/examples/adults/data/adult.csv
+  real_data: /home/forcebot/project/gtable/examples/adults/data/adult.npz
   metadata: /home/forcebot/project/gtable/examples/adults/data/adult.json
-  save_data: data/Civilian/balance_Civilian-15000
+  data_type: "numpy"
+
+
   save_checkpoints_steps: 1000
   epochs: 150
   cuda_visible_devices: 2
   g_penalty: 1.0
   n_critic: 1
   output: /home/forcebot/project/gtable/examples/adults/output/fake_adults_ctgan.csv
-  separated_embedding: true
-  continuous_embeddding: 'Bayesian_Gaussian_Norm'
+
+  numerical_embeddding: 'Bayesian_Gaussian_Norm'
   optim: adam
   learning_rate: 2e-4
   adam_beta1: 0.5
   adam_beta2: 0.9
 
-  transformer_type: "normal"
+  transformer_type: "gmm"
 
 evaluate:
   app: "CTGAN"
   run_type: "evaluate"
-  transformer_type: "normal"
+  transformer_type: "gmm"
   real_data: /home/forcebot/project/gtable/examples/adults/data/adult.csv
   fake_data: /home/forcebot/project/gtable/examples/adults/output/fake_adults_ctgan.csv
 #  fake_data: data/Civilian/ctgan_civilians_15000_notebook_fake.csv
