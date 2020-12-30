@@ -93,7 +93,7 @@ class Runner(object):
 
         if self.context.fake_data is not None and os.path.exists(self.context.fake_data):
             self.logging.info(f"Loading fake dataset: {self.context.fake_data} ...")
-            self.fake_data = self.load_dataset(self.context.fake_data, self.metadata)
+            self.fake_dataset = self.load_dataset(self.context.fake_data, self.metadata)
 
     def load_dataset(self, path, metadata):
         data_loader = get_data_loader(self.context)

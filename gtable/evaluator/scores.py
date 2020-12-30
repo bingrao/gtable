@@ -25,6 +25,7 @@ import pandas as pd
 import numpy as np
 import scipy.stats as ss
 from dython.nominal import theils_u, cramers_v
+from scipy.spatial.distance import cosine
 
 
 class Scorer(abc.ABC):
@@ -187,6 +188,16 @@ class RMSEScorer(Scorer):
     def score(self, y_true: np.ndarray, y_pred: np.ndarray):
         # return np.sqrt(mean_absolute_error(y_true, y_pred))
         return np.sqrt(mean_squared_error(y_true, y_pred))
+
+
+# Root Mean Square Error
+@register_scorer(name="cosine")
+class CosineScorer(Scorer):
+    def __init__(self):
+        super(CosineScorer, self).__init__("cosine")
+
+    def score(self, y_true: np.ndarray, y_pred: np.ndarray):
+        return cosine(y_true.reshape(-1), y_pred.reshape(-1))
 
 
 @register_scorer(name="cosine_similarity")

@@ -220,23 +220,6 @@ class CTGANSynthesizer(BaseSynthesizer):
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.trained_epoches = 0
 
-    def _apply_activate(self, data):
-        data_t = []
-        st = 0
-        for item in self.transformer.output_info:
-            if item[1] == 'tanh':
-                ed = st + item[0]
-                data_t.append(torch.tanh(data[:, st:ed]))
-                st = ed
-            elif item[1] == 'softmax':
-                ed = st + item[0]
-                data_t.append(functional.gumbel_softmax(data[:, st:ed], tau=0.2))
-                st = ed
-            else:
-                assert 0
-
-        return torch.cat(data_t, dim=1)
-
     def _cond_loss(self, data, c, m):
         loss = []
         st = 0

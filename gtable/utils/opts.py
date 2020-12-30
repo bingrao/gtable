@@ -16,6 +16,7 @@
 """ Implementation of all available options """
 from __future__ import print_function
 import configargparse
+import torch
 
 
 def config_opts(parser):
@@ -24,8 +25,7 @@ def config_opts(parser):
               is_config_file_arg=True, help='config file path')
 
     group.add('--app', '-app', type=str, choices=["CTGAN", "TVAE", "GTABLE", "TABLEGAN"],
-              default="CTGAN",
-              help="The type of application to generate synthetic data")
+              default="CTGAN", help="The type of application to generate synthetic data")
 
     group.add('--run_type', '-run_type', type=str, default='generation', required=False,
               choices=['generation', 'evaluate'],
@@ -42,9 +42,6 @@ def config_opts(parser):
 
     group.add('--project_dir', '-project_dir', type=str, default="",
               help="Root path of runing application")
-
-    group.add('--device', type=str, default='gpu', choices=['gpu', 'cpu'],
-              help="Set up device to run the application")
 
     group.add('--seed', '-seed', type=int, default=1337,
               help='The seed for random function')
@@ -76,17 +73,14 @@ def dataset_opts(parser):
                    'it will take the minimal length of both datasets and cut '
                    'the larger one off to make sure they are the same length.')
 
-    group.add('--attrib_num', '-attrib_num', type=int, default=0,
-              help="The number of columns in the dataset. Used if the Classifer NN is active.")
+    # group.add('--attrib_num', '-attrib_num', type=int, default=0,
+    #           help="The number of columns in the dataset. Used if the Classifer NN is active.")
 
-    # group.add('--save_data', '-save_data', type=str, required=False, default=None,
-    #           help="Output file for the prepared data")
+    # parser.add_argument('-t', '--tsv', action='store_true',
+    #                     help='Load data in TSV format instead of CSV')
 
-    parser.add_argument('-t', '--tsv', action='store_true',
-                        help='Load data in TSV format instead of CSV')
-
-    parser.add_argument('--header', '-header', dest='header', action='store_false',
-                        help='The CSV file has no header. Discrete columns will be indices.')
+    group.add_argument('--header', '-header', dest='header', action='store_false',
+                       help='The CSV file has no header. Discrete columns will be indices.')
 
     group.add('--sep', '-sep', type=str, default=',',
               help="The seperator symobl between two columns")
@@ -120,7 +114,8 @@ def dataset_opts(parser):
               help="Enable to use a identifical and unified embedding way for "
                    "each attributes.")
 
-    group.add('--numerical_embeddding', '-numerical_embeddding', type=str, default=None,
+    group.add('--numerical_embeddding', '-numerical_embeddding', type=str,
+              default='Bayesian_Gaussian_Norm',
               choices=['Bayesian_Gaussian_Norm', 'Gaussian_Norm', 'MinMax_Norm'],
               help="The way to normalize the numerical dataset")
 
@@ -129,11 +124,8 @@ def dataset_opts(parser):
               help="The way to normalize the categorial discrete dataset")
 
     group.add('--ordinal_embeddding', '-ordinal_embeddding', type=str,
-              choices=['One_Hot'], default='One_Hot',
+              choices=['Ordinal', 'MinMax_Norm', 'One_Hot'], default='Ordinal',
               help="The way to normalize the ordinal discrete dataset")
-
-    # parser.add_argument('-d', '--discrete',
-    #                     help='Comma separated list of discrete columns, no whitespaces')
 
     group.add('--embedding_combine', '-embedding_combine', type=str, choices=['matrix', 'vector'],
               default='matrix', help="The way to combine columns' embedding")
@@ -151,8 +143,11 @@ def dataset_opts(parser):
 def model_opts(parser):
     group = parser.add_argument_group('Model')
 
-    group.add('--feature_size', '-feature_size', type=int, default=266,
+    group.add('--feature_size', '-feature_size', type=int, default=256,
               help="Size of last FC layer to calculate the Hinge Loss fucntion.")
+
+    group.add('--noise', '-noise', default='normal', choices=['normal', 'gmm'],
+              help="Generating noise input method.")
 
     group.add("--noise_dim", "-noise_dim", type=int, default=128,
               help="The latent noise dimention")
@@ -212,6 +207,7 @@ def optimizer_opts(parser):
                    'not work well for normal models / default '
                    'baselines.')
 
+
 def checkpoint_opts(parser):
     group = parser.add_argument_group('Checkpoints')
 
@@ -246,9 +242,17 @@ def runtime_opts(parser):
     group.add('--sample_dir', '-sample_dir', type=str, default="samples",
               help="Directory name to save the image samples [samples]")
 
+    parser.add_argument('--device', '-device', type=str, choices=['cuda', 'cpu'],
+                        default='cuda' if torch.cuda.is_available() else 'cpu')
+
     group.add('--cuda_visible_devices', '-cuda_visible_devices', type=int, nargs='*',
-              default=[0, 1, 2, 3],
-              help="Specify the GPU visible Device ID for training task")
+              default=[0, 1, 2, 3], help="Specify the GPU visible Device ID for training task")
+
+    group.add("--num_gpus", "-num_gpus", type=int, default=1,
+              help="Number of GPUs to use for in-graph replication.")
+
+    group.add("--gpu_allow_growth", "-gpu_allow_growth", default=False, action="store_true",
+              help="Allocate GPU memory dynamically.")
 
 
 def train_opts(parser):
@@ -280,23 +284,11 @@ def train_opts(parser):
                    "Default is every update, "
                    "if -average_decay is set.")
 
-    group.add("--num_gpus", "-num_gpus", type=int, default=1,
-              help="Number of GPUs to use for in-graph replication.")
-
-    group.add("--gpu_allow_growth", "-gpu_allow_growth", default=False, action="store_true",
-              help="Allocate GPU memory dynamically.")
-
     group.add('--epochs', '-epochs', type=int, default=10,
               help='Deprecated epochs see train_steps')
 
     group.add("--eval_steps", "-eval_steps", type=int, default=1000,
               help="Eval model every # steps")
-
-    group.add("--with_eval", "-with_eval", default=False,
-              action="store_true", help="Enable automatic evaluation.")
-
-    group.add("--with_generation", "-with_generation", default=False,
-              action="store_true", help="Enable generating datasets")
 
     group.add("--save_summary_steps", "-save_summary_steps", type=int, default=1000,
               help="Print out model accuracy informaiton by every # steps")
@@ -343,13 +335,9 @@ def evaluate_opts(parser):
               choices=['mean_std', 'cumsums', 'distributions', 'correlation', 'pca'],
               help="The visual measures to show statistics of real and fake datasets")
 
-    group.add('--continuous_statistics', '-continuous_statistics', type=str, nargs='+',
+    group.add('--numerical_statistics', '-numerical_statistics', type=str, nargs='+',
               choices=['min', 'max', 'mean', 'median', 'std', 'var'], default=None,
               help="The statistics infomation of each numerical attributes")
-
-    group.add('--discrete_statistics', '-discrete_statistics', type=str, nargs='+',
-              choices=['min', 'max', 'mean', 'median', 'std', 'var'], default=None,
-              help="The statistics infomation of each categorial attributes")
 
 
 class StoreLoggingLevelAction(configargparse.Action):

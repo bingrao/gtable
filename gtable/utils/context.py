@@ -22,6 +22,7 @@ from os.path import join, exists
 import os
 from datetime import date
 from pathlib import Path
+import torch
 
 # BASE_DIR = dirname(dirname(dirname(abspath(__file__))))
 BASE_DIR = os.getcwd()
@@ -44,20 +45,16 @@ class Context:
         self.nums_record = 0
         self.config = config
 
-        self.is_gpu = False
-        # if self.config.device == 'gpu':
-        #     self.is_gpu = len(self.gpu_devices) > 0
+        # Trainning Device Set up
+        self.device = torch.device(self.config.device)
+        self.device_id = self.config.cuda_visible_devices
+        self.is_cuda = self.config.device == 'cuda'
+        self.is_cpu = self.config.device == 'cpu'
+        self.is_gpu_parallel = self.is_cuda and (len(self.device_id) > 1)
 
-        self.is_cpu = not self.is_gpu
-
-        if self.is_gpu and \
-            hasattr(self.config, 'cuda_visible_devices') and \
-            self.config.cuda_visible_devices:
+        if self.is_cuda:
             os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-            os.environ["CUDA_VISIBLE_DEVICES"] = str(self.config.cuda_visible_devices)
-
-        # import logging
-        # tf.get_logger().setLevel(logging.ERROR)
+            os.environ["CUDA_VISIBLE_DEVICES"] = str(self.device_id)
 
         self.project_dir = self.config.project_dir if self.config.project_dir != "" \
             else str(BASE_DIR)
@@ -104,9 +101,12 @@ class Context:
         self.data_type = self.config.data_type
         self.output = self.config.output
         self.num_samples = self.config.num_samples
-        self.features_col = self.config.features_col
-        self.target_col = self.config.target_col
+        # self.features_col = self.config.features_col
+        # self.target_col = self.config.target_col
 
         self.sep = self.config.sep
         self.drop = [] if self.config.drop is None else self.config.drop
         self.cat_cols = [] if self.config.cat_cols is None else self.config.cat_cols
+
+    def mapping_to_cuda(self, tensor):
+        return tensor.to(self.device) if tensor is not None and self.is_cuda else tensor

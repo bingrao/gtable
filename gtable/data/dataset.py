@@ -5,43 +5,7 @@ from gtable.utils.constants import CATEGORICAL, ORDINAL
 from gtable.data.inputter import get_metadata, _get_columns, pickle_load, pickle_save
 import numpy as np
 import pandas as pd
-import urllib
-import json
 import abc
-import os
-
-BASE_URL = 'http://sdgym.s3.amazonaws.com/datasets/'
-DATA_PATH = os.path.join(os.path.dirname(__file__), 'data')
-
-
-def _load_json(path):
-    with open(path) as json_file:
-        return json.load(json_file)
-
-
-def _load_file(filename, loader):
-    local_path = os.path.join(DATA_PATH, filename)
-    if not os.path.exists(local_path):
-        os.makedirs(DATA_PATH, exist_ok=True)
-        url = BASE_URL + filename
-
-        urllib.request.urlretrieve(url, local_path)
-
-    return loader(local_path)
-
-
-def load_dataset(name, benchmark=False):
-    # LOGGER.info('Loading dataset %s', name)
-    data = _load_file(name + '.npz', np.load)
-    meta = _load_file(name + '.json', _load_json)
-
-    categorical_columns, ordinal_columns = _get_columns(meta)
-
-    train = data['train']
-    if benchmark:
-        return train, data['test'], meta, categorical_columns, ordinal_columns
-
-    return train, categorical_columns, ordinal_columns
 
 
 class Dataset(abc.ABC):
@@ -59,20 +23,23 @@ class Dataset(abc.ABC):
         self.test_metadata = None
         self.num_test_dataset = 0
 
+        self.name_columns = None
+        self.num_columns = 0
+
         self.transformer = None
 
         self.random_seed = self.config.seed
         self.unique_thresh = self.config.unique_thresh
 
         # TODO preparing training datasets in future
-        self.target_col = self.config.target_col
-        self.features_col = self.config.features_col
+        # self.target_col = self.config.target_col
+        # self.features_col = self.config.features_col
 
     @property
     def name(self):
         return self._name
 
-    def load(self, inputPath: str):
+    def load(self, _input) -> (np.ndarray, np.ndarray):
         """
         Loading dataset from file system and convert it a DataFrme
         :return:
@@ -82,15 +49,30 @@ class Dataset(abc.ABC):
     def save(self, data, metadata, outputPath):
         pickle_save(self.context, {"data": data, "metadata": metadata}, outputPath)
 
+    def split_dataset(self, label=None):
+
+        _label = label if label is not None else self.metadata['label']
+
+        _train_dataset = pd.DataFrame(self.train_dataset, columns=self.name_columns)
+        _test_dataset = pd.DataFrame(self.test_dataset, columns=self.name_columns)
+
+        train_x = _train_dataset.drop([_label], axis=1).values
+        train_y = _train_dataset[_label]
+
+        test_x = _test_dataset.drop([_label], axis=1).values
+        test_y = _test_dataset[_label]
+
+        return train_x, train_y, test_x, test_y
+
     def preprocess(self):
         raise NotImplementedError
 
-    def __call__(self, inputPath: str, metadata):
+    def __call__(self, _input, metadata):
         # loading dataset as DataFrame
 
         self.metadata = metadata
 
-        self.train_dataset, self.test_dataset = self.load(inputPath)
+        self.train_dataset, self.test_dataset = self.load(_input)
         self.num_train_dataset = len(self.train_dataset)
         self.num_test_dataset = len(self.test_dataset)
 
@@ -102,8 +84,6 @@ class Dataset(abc.ABC):
 
         self.name_columns = list(map(lambda item: item['name'], metadata['columns']))
         self.num_columns = len(self.name_columns)
-
-
 
         # Data clean
         self.preprocess()
@@ -120,12 +100,12 @@ class CSVDataset(Dataset):
     def __init__(self, ctx, name):
         super(CSVDataset, self).__init__(ctx, name)
 
-    def load(self, inputPath: str) -> pd.DataFrame:
+    def load(self, _input) -> (np.ndarray, np.ndarray):
         """
         Loading dataset from file system and convert it a DataFrme
         :return:
         """
-        data, cat_cols = read_csv(csv_filename=inputPath, discrete=self.config.cat_cols)
+        data, cat_cols = read_csv(csv_filename=_input, discrete=self.config.cat_cols)
 
         if cat_cols is None:
             self.numerical_cols = [column for column in data._get_numeric_data().columns
@@ -175,7 +155,7 @@ class TSVDataset(Dataset):
     def __init__(self, ctx, name):
         super(TSVDataset, self).__init__(ctx, name)
 
-    def load(self, inputPath: str) -> pd.DataFrame:
+    def load(self, inputPath):
         pass
 
     def preprocess(self):
@@ -187,8 +167,8 @@ class NumpyDataset(Dataset):
     def __init__(self, ctx, name):
         super(NumpyDataset, self).__init__(ctx, name)
 
-    def load(self, inputPath: str):
-        dataset = np.load(inputPath)
+    def load(self, _input) -> (np.ndarray, np.ndarray):
+        dataset = np.load(_input)
         return dataset['train'], dataset['test']
 
     def preprocess(self):
@@ -200,7 +180,7 @@ class JsonDataset(Dataset):
     def __init__(self, ctx, name):
         super(JsonDataset, self).__init__(ctx, name)
 
-    def load(self, inputPath: str) -> pd.DataFrame:
+    def load(self, _input) -> (np.ndarray, np.ndarray):
         pass
 
     def preprocess(self):
@@ -212,7 +192,7 @@ class PickleDataset(Dataset):
     def __init__(self, ctx, name):
         super(PickleDataset, self).__init__(ctx, name)
 
-    def load(self, inputPath: str) -> pd.DataFrame:
+    def load(self, inputPath):
         pass
 
     def preprocess(self):
@@ -224,15 +204,27 @@ class TextDataset(Dataset):
     def __init__(self, ctx, name):
         super(TextDataset, self).__init__(ctx, name)
 
-    def load(self, inputPath: str) -> pd.DataFrame:
+    def load(self, _input) -> (np.ndarray, np.ndarray):
         pass
 
     def preprocess(self):
         pass
 
 
-def get_data_loader(ctx):
-    name = ctx.config.data_type
+@register_dataset(name="fake")
+class FakeDataset(Dataset):
+    def __init__(self, ctx, name):
+        super(FakeDataset, self).__init__(ctx, name)
+
+    def load(self, _input) -> (np.ndarray, np.ndarray):
+        return _input
+
+    def preprocess(self):
+        pass
+
+
+def get_data_loader(ctx, _name=None):
+    name = ctx.config.data_type if _name is None else _name
     data_class = _DATASET_REGISTRY.get(name.lower())
     if data_class is None:
         raise ValueError("No scorer associated with the name: {}".format(name))

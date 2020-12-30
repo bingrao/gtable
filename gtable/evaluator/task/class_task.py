@@ -106,17 +106,10 @@ class ClassEvaluator(BasedEvaluator):
     of evaluate and the visual evaluation method.
     """
 
-    def __init__(self, ctx, real, fake,
-                 numerical_columns=None,
-                 categorical_columns=None,
-                 seed=1337):
-        self.context = ctx
-        super(ClassEvaluator, self).__init__(config=self.context.config,
-                                             logger=self.context.logger,
+    def __init__(self, ctx, real, fake, seed=1337):
+        super(ClassEvaluator, self).__init__(ctx,
                                              real=real,
                                              fake=fake,
-                                             numerical_columns=numerical_columns,
-                                             categorical_columns=categorical_columns,
                                              seed=seed,
                                              validType="classifer")
 
@@ -124,20 +117,21 @@ class ClassEvaluator(BasedEvaluator):
         return make_evaluate_class_tasks(self.context)
 
     def run(self) -> float:
+
+        self.logging.info("Build evaluating datasets ...")
         self.build_datasets()
 
+        self.logging.info("Fitting evaluating models ...")
         self.fit_estimators()
 
+        self.logging.info("Getting estimator scores ...")
         estimators_scores = self.score_estimators()
 
         self.logging.info(f'Metrics score of Classifier tasks:\n{estimators_scores.to_string()}\n')
-
-        # mean = get_score("mape").score(estimators_scores['f1_score_real'],
-        # estimators_scores['f1_score_fake'])
 
         score_names = [score.name for score in self.scores]
         mape_scores = [get_score("mape").score(estimators_scores[f'{name}_real'],
                                                estimators_scores[f'{name}_fake'])
                        for name in score_names]
 
-        return 1 - statistics.median(mape_scores)
+        return 1 - statistics.mean(mape_scores)

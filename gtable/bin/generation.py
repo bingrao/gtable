@@ -30,6 +30,7 @@ def _get_parser():
     opts.checkpoint_opts(parser)
     opts.generation_opts(parser)
     opts.runtime_opts(parser)
+    opts.evaluate_opts(parser)
     return parser
 
 

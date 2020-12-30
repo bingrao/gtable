@@ -86,19 +86,10 @@ class RegrEvaluator(BasedEvaluator):
     of evaluate and the visual evaluation method.
     """
 
-    def __init__(self, ctx,
-                 real: pd.DataFrame,
-                 fake: pd.DataFrame,
-                 numerical_columns=None,
-                 categorical_columns=None,
-                 seed=1337):
-        self.context = ctx
-        super(RegrEvaluator, self).__init__(config=self.context.config,
-                                            logger=self.context.logger,
+    def __init__(self, ctx, real, fake, seed=1337):
+        super(RegrEvaluator, self).__init__(ctx,
                                             real=real,
                                             fake=fake,
-                                            numerical_columns=numerical_columns,
-                                            categorical_columns=categorical_columns,
                                             seed=seed,
                                             validType="regressor")
 

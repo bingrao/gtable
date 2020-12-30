@@ -22,6 +22,7 @@ from dython.nominal import compute_associations, numerical_encoding
 from gtable.evaluator.scores import get_score
 from gtable.evaluator.task.class_task import ClassEvaluator
 from gtable.evaluator.task.regr_task import RegrEvaluator
+from gtable.utils.constants import NUMERICAL, CATEGORICAL, ORDINAL
 import pandas as pd
 
 
@@ -33,30 +34,29 @@ class DataEvaluator:
     of evaluate and the visual evaluation method.
     """
 
-    def __init__(self, ctx, real, fake):
+    def __init__(self, ctx, real_dataset, fake_dataset):
         self.context = ctx
         self.config = self.context.config
         self.logging = self.context.logger
 
-        self.real = real.dataset.copy()  # Pandas Dataframe
-        self.fake = fake.dataset.copy()  # Pandas Dataframe
-        self.numerical_cols = real.numerical_cols
-        self.categorial_cols = fake.categorial_cols
+        self.metadata = real_dataset.metadata
+
+        self.real = pd.DataFrame(real_dataset.train_dataset, columns=real_dataset.name_columns)
+        self.fake = pd.DataFrame(fake_dataset.train_dataset, columns=fake_dataset.name_columns)
+
+        self.numerical_cols = [item['name'] for item in real_dataset.metadata['columns']
+                               if item['type'] == NUMERICAL]
+
+        self.categorial_cols = [item['name'] for item in real_dataset.metadata['columns']
+                                if item['type'] == CATEGORICAL or item['type'] == ORDINAL]
 
         # the metric to use for evaluation linear relations. Pearson's r by default,
         # but supports all models in scipy.stats
-        # self.comparison_metric = getattr(stats, metric)
-        self.comparison_metric = get_score("pearsonr")
+        # self.comparison_metric = get_score("pearsonr")
 
         self.random_seed = self.config.seed
 
-        if self.config.num_samples is None:
-            self.num_samples = min(len(self.real), len(self.fake))
-        elif len(self.fake) >= self.config.num_samples and len(self.real) >= self.config.num_samples:
-            self.num_samples = self.config.num_samples
-        else:
-            raise Exception(f'Make sure num_samples < len(fake/real). len(real): '
-                            f'{len(self.real)}, len(fake): {len(self.fake)}')
+        self.num_samples = min(len(self.real), len(self.fake))
 
         self.real = self.real.sample(self.num_samples)
         self.fake = self.fake.sample(self.num_samples)
@@ -66,16 +66,12 @@ class DataEvaluator:
         self.is_regr_evaluator = False
 
         if self.config.classify_tasks is not None:
-            self.evaluator = ClassEvaluator(self.context, real=real, fake=fake,
-                                            numerical_columns=self.numerical_cols,
-                                            categorical_columns=self.categorial_cols,
+            self.evaluator = ClassEvaluator(self.context, real=real_dataset, fake=fake_dataset,
                                             seed=self.random_seed)
             self.is_class_evaluator = True
 
         if self.config.regression_tasks is not None:
-            self.evaluator = RegrEvaluator(self.context, real=real, fake=fake,
-                                           numerical_columns=self.numerical_cols,
-                                           categorical_columns=self.categorial_cols,
+            self.evaluator = RegrEvaluator(self.context, real=real_dataset, fake=fake_dataset,
                                            seed=self.random_seed)
             self.is_regr_evaluator = True
 
@@ -87,12 +83,8 @@ class DataEvaluator:
                                "pca": self.plot_pca}
 
         # statistical methods for numerical attributes
-        self.continuous_statistics = [] if self.config.continuous_statistics is None \
-            else self.config.continuous_statistics
-
-        # statistical methods for categorial attributes
-        self.discrete_statistics = [] if self.config.discrete_statistics is None \
-            else self.config.discrete_statistics
+        self.numerical_statistics = [] if self.config.numerical_statistics is None \
+            else self.config.numerical_statistics
 
     def plot_mean_std(self):
         """
@@ -192,29 +184,22 @@ class DataEvaluator:
         """
         Calculate distance between correlation matrices with certain metric.
 
-        :param how: metric to measure distance. Choose from [``euclidean``, ``mae``, ``rmse``].
+        :param how: metric to measure distance.
+        Choose from [``euclidean``, ``mae``, ``rmse``, ``cosine``].
         :return: distance between the association matrices in the
         chosen evaluation metric. Default: Euclidean
         """
-        from scipy.spatial.distance import cosine
-        if how == 'euclidean':
-            distance_func = get_score("euclidean").score
-        elif how == 'mae':
-            distance_func = get_score("mae").score
-        elif how == 'rmse':
-            distance_func = get_score("rmse").score
-        elif how == 'cosine':
-            def custom_cosine(a, b):
-                return cosine(a.reshape(-1), b.reshape(-1))
 
-            distance_func = custom_cosine
-        else:
-            raise ValueError(f'`how` parameter must be in [euclidean, mae, rmse]')
+        assert how in ['euclidean', 'mae', 'rmse', 'cosine']
+
+        distance_func = get_score(how).score
 
         real_corr = compute_associations(self.real,
-                                         nominal_columns=self.categorial_cols, theil_u=True)
+                                         nominal_columns=self.categorial_cols,
+                                         theil_u=True)
         fake_corr = compute_associations(self.fake,
-                                         nominal_columns=self.categorial_cols, theil_u=True)
+                                         nominal_columns=self.categorial_cols,
+                                         theil_u=True)
 
         return distance_func(real_corr.values, fake_corr.values)
 
@@ -291,11 +276,11 @@ class DataEvaluator:
         self.pca_r = PCA(n_components=5)
         self.pca_f = PCA(n_components=5)
 
-        real = self.real
-        fake = self.fake
+        # real = self.real
+        # fake = self.fake
 
-        real = numerical_encoding(real, nominal_columns=self.categorial_cols)
-        fake = numerical_encoding(fake, nominal_columns=self.categorial_cols)
+        real = numerical_encoding(self.real, nominal_columns=self.categorial_cols)
+        fake = numerical_encoding(self.fake, nominal_columns=self.categorial_cols)
 
         self.pca_r.fit(real)
         self.pca_f.fit(fake)
@@ -305,7 +290,7 @@ class DataEvaluator:
                                          'fake': self.pca_f.explained_variance_}).to_string())
 
         if lingress:
-            corr, p, _ = self.comparison_metric.score(self.pca_r.explained_variance_,
+            corr, p, _ = get_score("pearsonr").score(self.pca_r.explained_variance_,
                                                       self.pca_f.explained_variance_)
             return corr
         else:
@@ -313,7 +298,7 @@ class DataEvaluator:
                                                 self.pca_f.explained_variance_)
             return 1 - pca_error
 
-    def numerical_statistics(self):
+    def compute_numerical_statistics(self, lingress=True):
         total_metrics = pd.DataFrame()
         total_diff = None
 
@@ -331,7 +316,7 @@ class DataEvaluator:
             for idx, value in fake_score().items():
                 fake_metrics[f'{score}_{idx}'] = value
 
-            if score in self.continuous_statistics:
+            if score in self.numerical_statistics:
                 score_stats = pd.concat([real_score(), fake_score()], axis=1)
                 score_stats.columns = [f'{score}_real', f'{score}_fake']
                 columns_metrics = score_stats if columns_metrics is None \
@@ -346,45 +331,59 @@ class DataEvaluator:
         total_metrics['fake'] = fake_metrics.values()
         total_metrics.index = real_metrics.keys()
 
-        if len(self.continuous_statistics) > 0:
+        if len(self.numerical_statistics) > 0:
             self.logging.info(f'Basic statistical information of each numerical attribute: '
                               f'\n {columns_metrics.to_string()}\n')
 
-        corr, p = get_score("spearmanr").score(total_metrics['real'], total_metrics['fake'])
-        return corr
+        if lingress:
+            corr, p = get_score("spearmanr").score(total_metrics['real'], total_metrics['fake'])
+            return corr
+        else:
+            error = get_score("mape").score(total_metrics['real'], total_metrics['fake'])
+            return 1 - error
 
-    def categorial_statistics(self):
+    def compute_categorial_statistics(self, lingress=True):
         total_metrics = pd.DataFrame()
-        columns_metrics = None
-        real_metrics = {}
-        fake_metrics = {}
-        for score in ['min', 'max', 'mean', 'median', 'std']:
 
-            real_score = getattr(self.real[self.categorial_cols], score)
-            fake_score = getattr(self.fake[self.categorial_cols], score)
+        def get_metrics(desc):
+            cols = desc.columns
+            index = desc.index
+            for _ in range(len(cols) - 1):
+                index = index.append(desc.index)
 
-            for idx, value in real_score().items():
-                real_metrics[f'{score}_{idx}'] = value
+            melt = desc.melt()
 
-            for idx, value in fake_score().items():
-                fake_metrics[f'{score}_{idx}'] = value
+            melt["name"] = melt['variable'] + "_" + index
 
-            if score in self.discrete_statistics:
-                score_stats = pd.concat([real_score(), fake_score()], axis=1)
-                score_stats.columns = [f'{score}_real', f'{score}_fake']
-                columns_metrics = score_stats if columns_metrics is None \
-                    else pd.concat([columns_metrics, score_stats], axis=1)
+            return melt[['name', 'value']].set_index('name').to_dict()['value']
+
+        real_desc = self.real[self.categorial_cols].astype('category') \
+            .describe().transpose().drop(["count"], axis=1)
+        real_metrics = get_metrics(real_desc)
+
+        fake_desc = self.fake[self.categorial_cols].astype('category') \
+            .describe().transpose().drop(["count"], axis=1)
+        fake_metrics = get_metrics(fake_desc)
 
         total_metrics['real'] = real_metrics.values()
         total_metrics['fake'] = fake_metrics.values()
         total_metrics.index = real_metrics.keys()
 
-        if len(self.discrete_statistics) > 0:
-            self.logging.info(f'Basic statistical information of each categorial attribute: '
-                              f'\n {columns_metrics.to_string()}\n')
+        if len(self.numerical_statistics) > 0:
+            real_desc.columns = [f"{name}_real" for name in real_desc.columns]
+            fake_desc.columns = [f"{name}_fake" for name in fake_desc.columns]
 
-        corr, p = get_score("spearmanr").score(total_metrics['real'], total_metrics['fake'])
-        return corr
+            _metrics = real_desc.join(fake_desc).sort_index(axis=1)
+            _metrics['freq_diff'] = _metrics['freq_real'] - _metrics['freq_fake']
+
+            self.logging.info(f'Basic statistical information of each categorial/ordinal '
+                              f'attribute: \n {_metrics.to_string()}\n')
+        if lingress:
+            corr, p = get_score("spearmanr").score(total_metrics['real'], total_metrics['fake'])
+            return corr
+        else:
+            error = get_score("mape").score(total_metrics['real'], total_metrics['fake'])
+            return 1 - error
 
     def statistical_evaluation(self) -> float:
         """
@@ -393,9 +392,35 @@ class DataEvaluator:
         values can differ a lot in magnitude, and Spearman's is more resilient to outliers.
         :return: correlation coefficient
         """
-        # return self.numerical_statistics() + self.categorial_statistics()
+        return (self.compute_numerical_statistics() * len(self.numerical_cols) +
+                self.compute_categorial_statistics() * len(self.categorial_cols)) / \
+               (len(self.numerical_cols) + len(self.categorial_cols))
 
-        return self.numerical_statistics()
+    def compute_distance(self, sample=3000):
+        real = self.real.values
+        fake = self.fake.values
+        mask_d = np.zeros(len(self.metadata['columns']))
+
+        for id_, info in enumerate(self.metadata['columns']):
+            if info['type'] in [CATEGORICAL, ORDINAL]:
+                mask_d[id_] = 1
+            else:
+                mask_d[id_] = 0
+
+        std = np.std(real, axis=0) + 1e-6
+
+        dis_all = []
+        for i in range(min(sample, len(real))):
+            current = fake[i]
+            distance_d = (real - current) * mask_d > 0
+            distance_d = np.sum(distance_d, axis=1)
+
+            distance_c = (real - current) * (1 - mask_d) / 2 / std
+            distance_c = np.sum(distance_c ** 2, axis=1)
+            distance = np.sqrt(np.min(distance_c + distance_d))
+            dis_all.append(distance)
+
+        return np.mean(dis_all)
 
     def correlation_correlation(self) -> float:
         """
@@ -412,8 +437,8 @@ class DataEvaluator:
             values = values[~np.eye(values.shape[0], dtype=bool)].reshape(values.shape[0], -1)
             total_metrics[ds_name] = values.flatten()
 
-        self.correlation_correlations = total_metrics
-        corr, p = self.comparison_metric.score(total_metrics['real'], total_metrics['fake'])
+        # self.correlation_correlations = total_metrics
+        corr, p = get_score("pearsonr").score(total_metrics['real'], total_metrics['fake'])
 
         self.logging.debug(f'\nColumn correlation between datasets:\n{total_metrics.to_string()}')
 
@@ -439,7 +464,7 @@ class DataEvaluator:
         fake = fake[columns]
         return real, fake
 
-    def row_distance(self, num_samples: int = None) -> Tuple[float, float]:
+    def compute_row_nearest_neighbor(self, num_samples: int = None) -> Tuple[float, float]:
         """
         Calculate mean and standard deviation distances between `self.fake` and `self.real`.
 
@@ -460,12 +485,18 @@ class DataEvaluator:
                 fake[col] = 0
         fake = fake[columns]
 
-        for column in real.columns.tolist():
-            if len(real[column].unique()) > 2:
-                real[column] = (real[column] - real[column].mean()) / real[column].std()
-                fake[column] = (fake[column] - fake[column].mean()) / fake[column].std()
+        # for column in real.columns.tolist():
+        #     if len(real[column].unique()) > 2:
+        #         real[column] = (real[column] - real[column].mean()) / real[column].std()
+        #         fake[column] = (fake[column] - fake[column].mean()) / fake[column].std()
+
+        for column in self.numerical_cols:
+            real[column] = (real[column] - real[column].mean()) / real[column].std()
+            fake[column] = (fake[column] - fake[column].mean()) / fake[column].std()
+
         assert real.columns.tolist() == fake.columns.tolist()
 
+        # (len_input, len_input)
         distances = cdist(real[:num_samples], fake[:num_samples])
         min_distances = np.min(distances, axis=1)
         min_mean = np.mean(min_distances)
@@ -494,42 +525,36 @@ class DataEvaluator:
         # warnings.filterwarnings(action='ignore', category=ConvergenceWarning)
         # pd.options.display.float_format = '{:,.4f}'.format
 
-        basic_statistical = self.statistical_evaluation()
-        correlation_correlation = self.correlation_correlation()
-        column_correlation = self.column_correlations()
-
-        # pca_variance = self.pca_correlation()
-
-        nearest_neighbor = self.row_distance()
-
-        miscellaneous = {}
+        miscellaneous = dict()
         miscellaneous['RMSE Column Correlation Distance'] = self.correlation_distance(how='rmse')
         miscellaneous['MAE Column Correlation Distance'] = self.correlation_distance(how='mae')
+        miscellaneous['Record Distance'] = self.compute_distance()
+
+        nearest_neighbor = self.compute_row_nearest_neighbor()
         miscellaneous['Mean Nearest Neighbor'] = nearest_neighbor[0]
         miscellaneous['std Nearest Neighbor'] = nearest_neighbor[1]
+
         miscellaneous['Duplicate rows between sets (real/fake)'] = self.get_duplicates()
         miscellaneous_df = pd.DataFrame({'Result': list(miscellaneous.values())},
                                         index=list(miscellaneous.keys()))
 
         all_results = {
-            'Spearman correlation of basic statistics': basic_statistical,
-            'Pearsonr correlation of column correlations': correlation_correlation,
-            'Mean of correlation between real/fake columns': column_correlation,
-            # 'MAPE 5 PCA components': pca_variance,
+            'Spearman correlation of basic statistics': self.statistical_evaluation(),
+            'Pearsonr correlation of column correlations': self.correlation_correlation(),
+            'Mean of correlation between real/fake columns': self.column_correlations(),
+            'MAPE 5 PCA components': self.pca_correlation(),
         }
+
         if self.is_class_evaluator:
-            all_results.update({"MAPE on F1_Scores of classification tasks": self.evaluator.run()})
+            all_results.update({"MAPE on Scores of classification tasks": self.evaluator.run()})
 
         if self.is_regr_evaluator:
             all_results.update({"Correlation on RMSE of regression tasks": self.evaluator.run()})
 
-        total_result = np.mean(list(all_results.values()))
-        all_results['Similarity Score [mean of all metrics]'] = total_result
+        all_results['Similarity Score [mean of all metrics]'] = np.mean(list(all_results.values()))
         all_results_df = pd.DataFrame({'Result': list(all_results.values())},
                                       index=list(all_results.keys()))
 
-        if len(self.continuous_statistics) > 0:
-            self.logging.info(f'Miscellaneous results:\n{miscellaneous_df.to_string()}\n')
+        self.logging.info(f'Miscellaneous results:\n{miscellaneous_df.to_string()}\n')
 
-        if len(self.continuous_statistics) > 0:
-            self.logging.info(f'Summary Results:\n{all_results_df.to_string()}\n')
+        self.logging.info(f'Summary Results:\n{all_results_df.to_string()}\n')

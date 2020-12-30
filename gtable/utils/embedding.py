@@ -14,10 +14,10 @@
 # limitations under the License.
 
 from sklearn.mixture import BayesianGaussianMixture, GaussianMixture
-from sklearn.preprocessing import MinMaxScaler, OneHotEncoder
-import abc
+from sklearn.preprocessing import MinMaxScaler, OneHotEncoder, OrdinalEncoder
 from gtable.utils.misc import ClassRegistry
 import numpy as np
+import abc
 
 
 class Embedding(abc.ABC):
@@ -228,6 +228,27 @@ class OneHotEmbedding(Embedding):
         self.model.fit(data)
         self.components = len(self.model.categories_[0])
         self.output_info = [(self.components, 'softmax')]
+        self.output_dimensions = self.components
+
+    def transform(self, data):
+        return self.model.transform(data)
+
+    def inverse_transform(self, data, sigma=None):
+        return self.model.inverse_transform(data)
+
+
+@register_embedding(name="ordinal")
+class OrdinalEmbedding(Embedding):
+    def __init__(self, column):
+        super(OrdinalEmbedding, self).__init__("ordinal", column)
+
+    def build_model(self):
+        return OrdinalEncoder()
+
+    def fit(self, data):
+        self.model.fit(data)
+        self.components = data.shape[1]
+        self.output_info = [(self.components, 'tanh')]
         self.output_dimensions = self.components
 
     def transform(self, data):

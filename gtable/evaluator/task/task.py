@@ -15,13 +15,13 @@
 
 from gtable.evaluator.scores import make_scores
 from sklearn.model_selection import train_test_split
-# from dython.nominal import numerical_encoding
 from gtable.evaluator.scores import get_score
 import abc
 import copy
 import pandas as pd
 import numpy as np
 from gtable.data.inputter import category_to_number
+from gtable.utils.constants import NUMERICAL, CATEGORICAL, ORDINAL
 
 
 class BaseTask(abc.ABC):
@@ -58,33 +58,37 @@ class BasedEvaluator:
     """
 
     def __init__(self,
-                 config,
-                 logger,
+                 ctx,
                  real,
                  fake,
-                 numerical_columns=None,
-                 categorical_columns=None,
                  seed=1337,
                  validType="classifer"):
         """
-        :param real: Real dataset (pd.DataFrame)
-        :param fake: Synthetic dataset (pd.DataFrame)
+        :param real: Real dataset
+        :param fake: Synthetic dataset
         `viz.plot_correlation_comparison` to indicate your model.
         """
         assert validType == "classifer" or validType == "regressor"
-        self.validType = validType
 
-        self.config = config
-        self.logging = logger
+        self.context = ctx
+        self.config = self.context.config
+        self.logging = self.context.logger
+        self.validType = validType
 
         self.real = real
         self.fake = fake
 
-        self.target_col = self.config.target_col
+        # self.target_col = self.real.metadata['label']
         self.features_col = self.config.features_col
 
-        self.categorical_columns = categorical_columns
-        self.numerical_columns = numerical_columns
+        self.numerical_cols = [item['name'] for item in real.metadata['columns']
+                               if item['type'] == NUMERICAL]
+
+        self.categorial_cols = [item['name'] for item in real.metadata['columns']
+                                if item['type'] == CATEGORICAL]
+
+        self.ordinal_cols = [item['name'] for item in real.metadata['columns']
+                             if item['type'] == ORDINAL]
 
         self.random_seed = seed
 
@@ -103,18 +107,18 @@ class BasedEvaluator:
             if self.validType == "regressor" \
             else make_scores(self.config.classify_scores)
 
-    def build_datasets_from_dataframe(self):
+    def build_datasets_from_dataframe(self, real, fake):
         # Convert both datasets to numerical representations and split x and  y
         # real_x = numerical_encoding(self.real.drop([self.target_col], axis=1),
         #                             nominal_columns=self.categorical_columns)
-        real_x, _ = category_to_number(self.real.drop([self.target_col], axis=1))
+        real_x, _ = category_to_number(real.drop([self.target_col], axis=1))
 
         columns = sorted(real_x.columns.tolist())
         real_x = real_x[columns]
 
         # fake_x = numerical_encoding(self.fake.drop([self.target_col], axis=1),
         #                             nominal_columns=self.categorical_columns)
-        fake_x, _ = category_to_number(self.fake.drop([self.target_col], axis=1))
+        fake_x, _ = category_to_number(fake.drop([self.target_col], axis=1))
         for col in columns:
             if col not in fake_x.columns.tolist():
                 fake_x[col] = 0
@@ -132,27 +136,27 @@ class BasedEvaluator:
             real_y = self.real[self.target_col]
             fake_y = self.fake[self.target_col]
 
-        self.real_x, self.real_y = real_x, real_y
-        self.fake_x, self.fake_y = fake_x, fake_y
+        self.real_x_train, self.real_x_test, self.real_y_train, self.real_y_test = \
+            train_test_split(real_x, real_y, test_size=0.2)
+
+        self.fake_x_train, self.fake_x_test, self.fake_y_train, self.fake_y_test = \
+            train_test_split(fake_x, fake_y, test_size=0.2)
+
+    def build_datasets_from_dataset(self, real, fake):
+        self.real_x_train, self.real_y_train, \
+            self.real_x_test, self.real_y_test = real.split_dataset()
+
+        self.fake_x_train, self.fake_y_train, \
+            self.fake_x_test, self.fake_y_test = fake.split_dataset()
 
     def build_datasets(self):
         # For reproducibilty:
         np.random.seed(self.random_seed)
 
         if isinstance(self.real, pd.DataFrame) and isinstance(self.fake, pd.DataFrame):
-            self.build_datasets_from_dataframe()
+            self.build_datasets_from_dataframe(self.real, self.fake)
         else:
-            self.real_x = self.real.X
-            self.real_y = self.real.y
-
-            self.fake_x = self.fake.X
-            self.fake_y = self.fake.y
-
-        self.real_x_train, self.real_x_test, self.real_y_train, self.real_y_test = \
-            train_test_split(self.real_x, self.real_y, test_size=0.2)
-
-        self.fake_x_train, self.fake_x_test, self.fake_y_train, self.fake_y_test = \
-            train_test_split(self.fake_x, self.fake_y, test_size=0.2)
+            self.build_datasets_from_dataset(self.real, self.fake)
 
     def fit_estimators(self):
         """
@@ -176,12 +180,12 @@ class BasedEvaluator:
         rows = []
         for real_estimator, fake_estimator, estimator_name in \
                 zip(self.real_estimators, self.fake_estimators, self.estimator_names):
-            # for dataset, target, dataset_name in zip([self.real_x_test, self.fake_x_test],
-            #                                          [self.real_y_test, self.fake_y_test],
-            #                                          ['real', 'fake']):
-            for dataset, target, dataset_name in zip([self.real_x, self.fake_x],
-                                                     [self.real_y, self.fake_y],
+            for dataset, target, dataset_name in zip([self.real_x_test, self.fake_x_test],
+                                                     [self.real_y_test, self.fake_y_test],
                                                      ['real', 'fake']):
+                # for dataset, target, dataset_name in zip([self.real_x, self.fake_x],
+                #                                          [self.real_y, self.fake_y],
+                #                                          ['real', 'fake']):
                 predict_real = real_estimator.predict(dataset)
                 predict_fake = fake_estimator.predict(dataset)
                 row = {'index': f'{estimator_name}_{dataset_name}'}

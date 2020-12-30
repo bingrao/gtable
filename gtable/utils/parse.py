@@ -151,12 +151,6 @@ class ArgumentParser(cfargparse.ArgumentParser):
             raise AssertionError("Classification and Regression "
                                  "evaluator cannot be enabled at the same time")
 
-        # if opt.classify_tasks and 'F1_Score' not in opt.classify_scores:
-        #     raise AssertionError("F1_Score should be eanbled by default for classifciation task")
-
-        if opt.real_data and opt.save_data:
-            raise AssertionError("In evaluation task, we only take data from scratch")
-
     @classmethod
     def validate_preprocess_args(cls, opt):
         pass

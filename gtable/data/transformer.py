@@ -280,8 +280,8 @@ class GMMTransformer(Transformer):
     def __init__(self, ctx, name, metadata):
         super(GMMTransformer, self).__init__(ctx, name, metadata)
 
-        self.dataframe = False
-        self.column_names = None
+        # self.dataframe = False
+        # self.column_names = None
 
     def fit(self, data):
         for idx, item in enumerate(self.metadata['columns']):
@@ -300,12 +300,21 @@ class GMMTransformer(Transformer):
         for idx, meta in enumerate(self.meta):
             column_data = data[:, idx].reshape([-1, 1])
 
-            if self.unify_embedding is not None:
-                values.append(meta.transform(column_data))
-            elif meta.type == NUMERICAL:
-                values += meta.transform(column_data)
+            transformed_data = meta.transform(column_data)
+
+            if isinstance(transformed_data, list):
+                values += transformed_data
             else:
-                values.append(meta.transform(column_data))
+                values.append(transformed_data)
+
+            # if self.unify_embedding is not None:
+            #     values.append(meta.transform(column_data))
+            # elif meta.type == NUMERICAL:
+            #     values += meta.transform(column_data)
+            # elif meta.type == ORDINAL:
+            #     values.append(meta.transform(column_data))
+            # else:  # CATEGORICAL
+            #     values.append(meta.transform(column_data))
 
         return np.concatenate(values, axis=1).astype(float)
 

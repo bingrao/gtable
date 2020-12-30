@@ -19,13 +19,21 @@ generation:
 
   transformer_type: "tablegan"
 
+  features_col: ['age', 'workclass', 'fnlwgt', 'education', 'education-num', 'marital-status',
+                 'occupation', 'relationship', 'race', 'sex', 'capital-gain', 'capital-loss',
+                 'hours-per-week', 'native-country']
+  target_col: 'income'
+  classify_tasks: ['xgboost', 'logistic_regression', 'random_forest', 'decision_tree', 'mlp']
+  classify_scores: [ 'F1_Score', 'Recall_Score', 'Precision_Score']
+  numerical_statistics: ['min', 'max', 'mean', 'median', 'std', 'var']
 evaluate:
   app: "TABLEGAN"
   run_type: "evaluate"
   transformer_type: "tablegan"
-  real_data: /home/forcebot/project/gtable/examples/adults/data/adult.csv
-  fake_data: /home/forcebot/project/gtable/examples/adults/output/fake_adults_tvae.csv
-
+  data_type: "numpy"
+  real_data: /home/forcebot/project/gtable/examples/adults/data/adult.npz
+  fake_data: /home/forcebot/project/gtable/examples/adults/data/adult.npz
+  metadata: /home/forcebot/project/gtable/examples/adults/data/adult.json
 
   features_col: ['age', 'workclass', 'fnlwgt', 'education', 'education-num', 'marital-status',
                  'occupation', 'relationship', 'race', 'sex', 'capital-gain', 'capital-loss',
@@ -33,7 +41,6 @@ evaluate:
   target_col: 'income'
 
   classify_tasks: ['xgboost', 'logistic_regression', 'random_forest', 'decision_tree', 'mlp']
-#  classify_tasks: ['xgboost']
   classify_scores: [ 'F1_Score', 'Recall_Score', 'Precision_Score']
 
 #  regression_tasks: ['random_forest_regr', 'lasso', 'ridge', 'elastic_net']
@@ -42,5 +49,4 @@ evaluate:
 #  visual: ['mean_std', 'cumsums', 'distributions', 'correlation', 'pca']
 #  visual: ['correlation']
 
-  continuous_statistics: ['min', 'max', 'mean', 'median', 'std', 'var']
-  discrete_statistics: ['min', 'max', 'mean', 'median', 'std', 'var']
+  numerical_statistics: ['min', 'max', 'mean', 'median', 'std', 'var']

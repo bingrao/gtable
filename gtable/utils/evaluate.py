@@ -347,15 +347,18 @@ _EVALUATORS = {
 }
 
 
-def compute_scores(dataset, synthesized_data):
+def compute_scores(real, fake):
 
-    train = dataset.train_dataset
-    test = dataset.test_dataset
-    metadata = dataset.metadata
+    real_train = real.train_dataset
+    real_test = real.test_dataset
+    metadata = real.metadata
+
+    fake_train = fake.train_dataset
+    fake_test = fake.test_dataset
 
     evaluator = _EVALUATORS[metadata['problem_type']]
 
-    scores = evaluator(synthesized_data, test, metadata)
-    scores['distance'] = _compute_distance(train, synthesized_data, metadata)
+    scores = evaluator(fake_train, real_test, metadata)
+    scores['distance'] = _compute_distance(real_train, fake_train, metadata)
 
     return scores

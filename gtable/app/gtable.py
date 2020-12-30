@@ -1,14 +1,14 @@
 from gtable.app.base import BaseSynthesizer
 from torch.nn import functional
 from gtable.data.sampler import RandomSampler
-from gtable.data.inputter import write_tsv
 from gtable.utils.misc import pbar
 from gtable.utils.optimizers import build_torch_optimizer
-import torch
 from torch.nn import BatchNorm1d, Dropout, LeakyReLU, Linear, Module, ReLU, Sequential
 import numpy as np
 import torch.nn as nn
 import copy
+import torch
+from torch.autograd import Variable
 
 
 def clones(module, N):
@@ -144,7 +144,10 @@ class ConditionalGenerator(object):
                 end = start + item[0]
                 max_interval = max(max_interval, end - start)
                 counter += 1
+
+                # The indices of the maximum values along an row axis
                 self.model.append(np.argmax(data[:, start:end], axis=-1))
+
                 start = end
             else:
                 assert 0
@@ -152,11 +155,11 @@ class ConditionalGenerator(object):
         assert start == data.shape[1]
 
         self.interval = []
-        self.n_col = 0
-        self.n_opt = 0
+        self.n_col = 0  # nums of categorial columns
+        self.n_opt = 0  # nums of dimentions for all categorial columns
         skip = False
         start = 0
-        self.p = np.zeros((counter, max_interval))
+        self.p = np.zeros((counter, max_interval))  # (nums_categorial, max_size_one_hot)
         for item in output_info:
             if item[1] == 'tanh':
                 skip = True
@@ -168,7 +171,7 @@ class ConditionalGenerator(object):
                     skip = False
                     continue
                 end = start + item[0]
-                tmp = np.sum(data[:, start:end], axis=0)
+                tmp = np.sum(data[:, start:end], axis=0)  # Sum along with column axis
                 if log_frequency:
                     tmp = np.log(tmp + 1)
                 tmp = tmp / np.sum(tmp)
@@ -183,22 +186,35 @@ class ConditionalGenerator(object):
         self.interval = np.asarray(self.interval)
 
     def random_choice_prob_index(self, idx):
+        # idx: 1D (batch_size, );
+        # a (batch_size, max_internal)
         a = self.p[idx]
+
+        # random values (batch_size, 1)
         r = np.expand_dims(np.random.rand(a.shape[0]), axis=1)
+
+        # cumsum: Return the cumulative sum of the elements along a given axis.
+        # argmax: Returns the indices of the maximum values along an axis.
+        # return: 1D (batch_size, )
         return (a.cumsum(axis=1) > r).argmax(axis=1)
 
     def sample(self, batch):
         if self.n_col == 0:
             return None
 
-        batch = batch
+        # Generating a [batch]-size samples from "np.arange(self.n_col)",
+        # idx.shape: (batch_size, )
         idx = np.random.choice(np.arange(self.n_col), batch)
 
-        vec1 = np.zeros((batch, self.n_opt), dtype='float32')
-        mask1 = np.zeros((batch, self.n_col), dtype='float32')
+        vec1 = np.zeros((batch, self.n_opt), dtype='float32')  # (batch_size, self.n_opt)
+        mask1 = np.zeros((batch, self.n_col), dtype='float32')  # (batch_size, self.n_col)
+
         mask1[np.arange(batch), idx] = 1
+        # opt1prime.shape 1D (batch_size, )
         opt1prime = self.random_choice_prob_index(idx)
+
         opt1 = self.interval[idx, 0] + opt1prime
+
         vec1[np.arange(batch), opt1] = 1
 
         return vec1, mask1, idx, opt1prime
@@ -236,10 +252,6 @@ class GTABLESynthesizer(BaseSynthesizer):
     def __init__(self, ctx):
         super(GTABLESynthesizer, self).__init__(ctx)
 
-        self.noise_dim = self.config.noise_dim
-        self.batch_size = self.config.batch_size
-        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
     def build_model(self, log_frequency=True):
 
         self.data_sampler = RandomSampler(self.train_data, self.transformer.output_info)
@@ -261,7 +273,12 @@ class GTABLESynthesizer(BaseSynthesizer):
         self.config.learning_rate_decay = 0
         self.optimizerD = build_torch_optimizer(self.discriminator, self.config)
 
-    def discriminator_train_step(self, fakez):
+    def discriminator_train_step(self):
+        """
+            fakez.shape torch.Size([500, 128])
+        """
+        fakez = self.get_input_noise()
+
         # 1. Reset gradients
         self.optimizerD.zero_grad()
 
@@ -272,9 +289,15 @@ class GTABLESynthesizer(BaseSynthesizer):
             real = self.data_sampler.sample(self.batch_size, col, opt)
             c2 = c1
         else:
+            # c1.shape torch.Size([500, 103]),
+            # m1.shape (500, 9),
+            # col.shape (500,),
+            # opt.shape (500,)
             c1, m1, col, opt = condvec
             c1 = torch.from_numpy(c1).to(self.device)
             # m1 = torch.from_numpy(m1).to(self.device)
+
+            # fakez.shape torch.Size([500, 231])
             fakez = torch.cat([fakez, c1], dim=1)
 
             perm = np.arange(self.batch_size)
@@ -311,7 +334,12 @@ class GTABLESynthesizer(BaseSynthesizer):
 
         return loss_d + pen
 
-    def generator_train_step(self, fakez):
+    def generator_train_step(self):
+        """
+            fakez.shape torch.Size([500, 128])
+        """
+        fakez = self.get_input_noise()
+
         # Reset gradients
         self.optimizerG.zero_grad()
 
@@ -347,19 +375,33 @@ class GTABLESynthesizer(BaseSynthesizer):
 
         return loss_g
 
+    def get_input_noise(self):
+
+        mean = torch.zeros(self.batch_size,
+                           self.noise_dim,
+                           device=self.device)
+        std = mean + 1
+        fakez = torch.normal(mean=mean, std=std)
+
+        if self.config.noise == "gmm":
+            g_z = Variable(torch.randn(self.batch_size, self.noise_dim).type(torch.float32))
+            g_sig = Variable(torch.randn(self.batch_size, self.noise_dim).type(torch.float32))
+            return self.context.mapping_to_cuda(g_z) + \
+                   torch.mul(fakez, self.context.mapping_to_cuda(g_sig))
+        else:
+            return fakez
+
     def train(self):
         assert self.batch_size % 2 == 0
-        mean = torch.zeros(self.batch_size, self.noise_dim, device=self.device)
-        std = mean + 1
 
         steps_per_epoch = max(len(self.train_data) // self.batch_size, 1)
         for epoch in range(self.config.epochs):
             bar = pbar(self.num_samples, self.config.batch_size, epoch, self.config.epochs)
             for step in range(steps_per_epoch):
-                loss_g = self.generator_train_step(torch.normal(mean=mean, std=std))
+                loss_g = self.generator_train_step()
 
                 for _ in range(self.config.n_critic):
-                    loss_d = self.discriminator_train_step(torch.normal(mean=mean, std=std))
+                    loss_d = self.discriminator_train_step()
 
                 bar.postfix['g_loss'] = f'{loss_g.detach().cpu():6.3f}'
                 bar.postfix['d_loss'] = f'{loss_d.detach().cpu():6.3f}'
@@ -370,23 +412,6 @@ class GTABLESynthesizer(BaseSynthesizer):
 
         if self.config.save is not None:
             self.save(self.config.save)
-
-    def _apply_activate(self, data):
-        data_t = []
-        st = 0
-        for item in self.transformer.output_info:
-            if item[1] == 'tanh':
-                ed = st + item[0]
-                data_t.append(torch.tanh(data[:, st:ed]))
-                st = ed
-            elif item[1] == 'softmax':
-                ed = st + item[0]
-                data_t.append(functional.gumbel_softmax(data[:, st:ed], tau=0.2))
-                st = ed
-            else:
-                assert 0
-
-        return torch.cat(data_t, dim=1)
 
     def _cond_loss(self, data, c, m):
         loss = []

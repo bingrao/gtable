@@ -7,7 +7,6 @@ class Sampler(object):
 
 
 class RandomSampler(Sampler):
-    """docstring for Sampler."""
     def __init__(self, data, output_info):
         super(RandomSampler, self).__init__()
         self.data = data
@@ -30,7 +29,7 @@ class RandomSampler(Sampler):
                 ed = st + item[0]
                 tmp = []
                 for j in range(item[0]):
-                    tmp.append(np.nonzero(data[:, st + j])[0])
+                    tmp.append(np.nonzero(data[:, st + j])[0])  # The indice of non-zero elements
 
                 self.model.append(tmp)
                 st = ed
@@ -40,11 +39,16 @@ class RandomSampler(Sampler):
         assert st == data.shape[1]
 
     def sample(self, n, col, opt):
+        """
+            n:
+            col:
+            opt:
+        """
         if col is None:
             idx = np.random.choice(np.arange(self.n), n)
             return self.data[idx]
 
-        idx = []
+        idx = []  # batch_size of list
         for c, o in zip(col, opt):
             idx.append(np.random.choice(self.model[c][o]))
 

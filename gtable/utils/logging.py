@@ -49,3 +49,54 @@ def init_logger(run_name="logs", save_log=None, level=logging.INFO):
         logger.addHandler(stream_handler)
 
     return logger
+
+
+class Logger(object):
+    def __init__(self):
+        self.run_name="logs"
+        self.save_log = None
+        self.level = logging.INFO
+        self.logging = self.init_logger()
+
+    def init_logger(self):
+        log_filename = f'{self.run_name}.log'
+        if self.save_log is None:
+            log_dir = join(BASE_DIR, 'logs')
+            if not exists(log_dir):
+                os.makedirs(log_dir)
+            log_filepath = join(log_dir, log_filename)
+        else:
+            log_filepath = self.save_log
+
+        logger = logging.getLogger(self.run_name)
+
+        logger.setLevel(self.level)
+
+        if not logger.handlers:  # execute only if logger doesn't already exist
+            file_handler = logging.FileHandler(log_filepath, 'w', 'utf-8')
+            stream_handler = logging.StreamHandler(os.sys.stdout)
+
+            formatter = logging.Formatter('[%(levelname)s] %(asctime)s > %(message)s',
+                                          datefmt='%Y-%m-%d %H:%M:%S')
+
+            file_handler.setFormatter(formatter)
+            stream_handler.setFormatter(formatter)
+
+            logger.addHandler(file_handler)
+            logger.addHandler(stream_handler)
+
+        return logger
+
+    def info(self, msg, *args, **kwargs):
+        self.logging.info(msg, *args, **kwargs)
+
+    def debug(self, msg, *args, **kwargs):
+        self.logging.debug(msg, *args, **kwargs)
+
+    def warn(self, msg, *args, **kwargs):
+        self.logging.warn(msg, *args, **kwargs)
+
+    def error(self, msg, *args, **kwargs):
+        self.logging.error(msg, *args, **kwargs)
+
+
