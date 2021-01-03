@@ -1,8 +1,8 @@
 generation:
   app: "CTGAN"
   run_type: "generation"
-  real_data: /home/forcebot/project/gtable/examples/adults/data/adult.npz
-  metadata: /home/forcebot/project/gtable/examples/adults/data/adult.json
+  real_data: examples/adults/data/adult.npz
+  metadata: examples/adults/data/adult.json
   data_type: "numpy"
 
   save_checkpoints_steps: 1000
@@ -10,7 +10,7 @@ generation:
   cuda_visible_devices: 2
   g_penalty: 3.0
   n_critic: 5
-  output: /home/forcebot/project/gtable/examples/adults/output/fake_adults_ctgan.csv
+  output: examples/adults/output/fake_adults_ctgan.csv
 
   numerical_embeddding: 'Bayesian_Gaussian_Norm'
   ordinal_embeddding: 'One_Hot'
@@ -39,9 +39,9 @@ evaluate:
   run_type: "evaluate"
   transformer_type: "gmm"
   data_type: "numpy"
-  real_data: /home/forcebot/project/gtable/examples/adults/data/adult.npz
-  fake_data: /home/forcebot/project/gtable/examples/adults/data/adult.npz
-  metadata: /home/forcebot/project/gtable/examples/adults/data/adult.json
+  real_data: examples/adults/data/adult.npz
+  fake_data: examples/adults/data/adult.npz
+  metadata: examples/adults/data/adult.json
 
   features_col: ['age', 'workclass', 'fnlwgt', 'education', 'education-num', 'marital-status',
                  'occupation', 'relationship', 'race', 'sex', 'capital-gain', 'capital-loss',

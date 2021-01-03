@@ -4,38 +4,41 @@ from torch.utils.data import DataLoader, TensorDataset
 from gtable.app.base import BaseSynthesizer
 import numpy as np
 from gtable.data.inputter import write_tsv
-from gtable.data.transformer import build_transformer
 import torch
 from torch.nn import Linear, Module, Parameter, ReLU, Sequential
 
 
 class Encoder(Module):
-    def __init__(self, data_dim, compress_dims, embedding_dim):
+    def __init__(self, data_dim, compress_dims, noise_dim):
         super(Encoder, self).__init__()
         dim = data_dim
         seq = []
         for item in list(compress_dims):
-            seq += [
-                Linear(dim, item),
-                ReLU()
-            ]
+            seq += [Linear(dim, item), ReLU()]
             dim = item
         self.seq = Sequential(*seq)
-        self.fc1 = Linear(dim, embedding_dim)
-        self.fc2 = Linear(dim, embedding_dim)
+        self.fc1 = Linear(dim, noise_dim)
+        self.fc2 = Linear(dim, noise_dim)
 
     def forward(self, x):
+        # [batch_size, dim] torch.Size([500, 128])
         feature = self.seq(x)
+
+        # [batch_size, noise_dim] torch.Size([500, 128])
         mu = self.fc1(feature)
+
+        # [batch_size, noise_dim], torch.Size([500, 128])
         logvar = self.fc2(feature)
+
+        # [batch_size, noise_dim], torch.Size([500, 128])
         std = torch.exp(0.5 * logvar)
         return mu, std, logvar
 
 
 class Decoder(Module):
-    def __init__(self, embedding_dim, decompress_dims, data_dim):
+    def __init__(self, noise_dim, decompress_dims, data_dim):
         super(Decoder, self).__init__()
-        dim = embedding_dim
+        dim = noise_dim
         seq = []
         for item in list(decompress_dims):
             seq += [Linear(dim, item), ReLU()]
@@ -43,7 +46,7 @@ class Decoder(Module):
 
         seq.append(Linear(dim, data_dim))
         self.seq = Sequential(*seq)
-        self.sigma = Parameter(torch.ones(data_dim) * 0.1)
+        self.sigma = Parameter(torch.ones(data_dim) * 0.1, requires_grad=False)
 
     def forward(self, x):
         return self.seq(x), self.sigma
@@ -55,31 +58,27 @@ class TVAESynthesizer(BaseSynthesizer):
     def __init__(
         self,
         ctx,
-        embedding_dim=128,
         compress_dims=(128, 128),
-        decompress_dims=(128, 128),
-        l2scale=1e-5,
-        batch_size=500,
-        epochs=300
+        decompress_dims=(128, 128)
     ):
         super(TVAESynthesizer, self).__init__(ctx)
-        self.embedding_dim = embedding_dim
+        self.noise_dim = self.config.noise_dim
         self.compress_dims = compress_dims
         self.decompress_dims = decompress_dims
 
-        self.l2scale = l2scale
-        self.batch_size = batch_size
+        self.l2scale = self.config.learning_rate
+        self.batch_size = self.config.batch_size
         self.loss_factor = 2
         self.epochs = self.config.epochs
 
-        self._device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self._device = self.context.device
 
     def fit(self, dataset, categorical_columns=tuple(), ordinal_columns=tuple(), **kwargs):
         self.transformer = dataset.transformer
 
         self.transformer.fit(dataset.train_dataset)
 
-        # numpy array [nums_samples, dim] (32561, 157)
+        # numpy array [nums_samples, dim] (32561, 159)
         data = self.transformer.transform(dataset.train_dataset)
 
         self.num_samples = len(data)
@@ -88,20 +87,21 @@ class TVAESynthesizer(BaseSynthesizer):
         loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True, drop_last=True)
 
         data_dim = self.transformer.output_dimensions
-        encoder = Encoder(data_dim, self.compress_dims, self.embedding_dim).to(self._device)
-        self.decoder = Decoder(self.embedding_dim, self.compress_dims, data_dim).to(self._device)
+        self.encoder = Encoder(data_dim, self.compress_dims, self.noise_dim).to(self._device)
+        self.decoder = Decoder(self.noise_dim, self.compress_dims, data_dim).to(self._device)
         optimizerAE = Adam(
-            list(encoder.parameters()) + list(self.decoder.parameters()),
+            list(self.encoder.parameters()) + list(self.decoder.parameters()),
             weight_decay=self.l2scale)
-
+        loss_1 = 0.0
+        loss_2 = 0.0
         for i in range(self.epochs):
             for id_, data in enumerate(loader):
                 optimizerAE.zero_grad()
-                real = data[0].to(self._device)
-                mu, std, logvar = encoder(real)
-                eps = torch.randn_like(std)
-                emb = eps * std + mu
-                rec, sigmas = self.decoder(emb)
+                real = data[0].to(self._device)  # [Batch_size, dim], e.g. torch.Size([500, 159])
+                mu, std, logvar = self.encoder(real)
+                eps = torch.randn_like(std)  # [batch_size, noise_dim], e.g. torch.Size([500, 128])
+                emb = eps * std + mu  # [batch_size, noise_dim], e.g. torch.Size([500, 128])
+                rec, sigmas = self.decoder(emb)  # torch.Size([500, 159]),   torch.Size([159])
                 loss_1, loss_2 = self.loss_function(rec, real, sigmas, mu, logvar,
                                                     self.transformer.output_info,
                                                     self.loss_factor)
@@ -117,8 +117,9 @@ class TVAESynthesizer(BaseSynthesizer):
 
         steps = num_samples // self.batch_size + 1
         data = []
+        sigmas = None
         for _ in range(steps):
-            mean = torch.zeros(self.batch_size, self.embedding_dim)
+            mean = torch.zeros(self.batch_size, self.noise_dim)
             std = mean + 1
             noise = torch.normal(mean=mean, std=std).to(self._device)
             fake, sigmas = self.decoder(noise)
@@ -147,7 +148,8 @@ class TVAESynthesizer(BaseSynthesizer):
         else:
             sampled.to_csv(self.config.output, index=False)
 
-    def loss_function(self, recon_x, x, sigmas, mu, logvar, output_info, factor):
+    @staticmethod
+    def loss_function(recon_x, x, sigmas, mu, logvar, output_info, factor):
         st = 0
         loss = []
         for item in output_info:

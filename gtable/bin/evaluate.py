@@ -24,6 +24,12 @@ from gtable.utils import Context
 def _get_parser():
     parser = ArgumentParser(run_type="evaluate", description='evaluate.py')
     opts.config_opts(parser)
+    opts.train_opts(parser)
+    opts.model_opts(parser)
+    opts.optimizer_opts(parser)
+    opts.checkpoint_opts(parser)
+    # opts.generation_opts(parser)
+    opts.runtime_opts(parser)
     opts.evaluate_opts(parser)
     return parser
 

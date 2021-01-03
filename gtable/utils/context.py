@@ -93,15 +93,18 @@ class Context:
         init_rng(seed=0)
         warnings.filterwarnings('ignore')
 
-        ######################## Dataset related helpers ######################
+        """
+        Dataset related helpers
+        """
 
         self.real_data = self.config.real_data
         self.fake_data = self.config.fake_data
         self.metadata = self.config.metadata
         self.data_type = self.config.data_type
         self.output = self.config.output
+        create_dir(self.output)
+
         self.num_samples = self.config.num_samples
-        # self.features_col = self.config.features_col
         # self.target_col = self.config.target_col
 
         self.sep = self.config.sep

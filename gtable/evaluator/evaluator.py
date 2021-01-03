@@ -14,7 +14,7 @@
 # limitations under the License.
 
 """Evaluation related classes and functions."""
-from gtable.evaluator.viz import *
+from gtable.evaluator.viz import get_plot
 from typing import Tuple
 from scipy.spatial.distance import cdist
 from sklearn.decomposition import PCA
@@ -23,7 +23,10 @@ from gtable.evaluator.scores import get_score
 from gtable.evaluator.task.class_task import ClassEvaluator
 from gtable.evaluator.task.regr_task import RegrEvaluator
 from gtable.utils.constants import NUMERICAL, CATEGORICAL, ORDINAL
+from typing import Union
 import pandas as pd
+
+import numpy as np
 
 
 class DataEvaluator:
@@ -66,119 +69,29 @@ class DataEvaluator:
         self.is_regr_evaluator = False
 
         if self.config.classify_tasks is not None:
-            self.evaluator = ClassEvaluator(self.context, real=real_dataset, fake=fake_dataset,
+            self.evaluator = ClassEvaluator(self.context,
+                                            real=real_dataset,
+                                            fake=fake_dataset,
                                             seed=self.random_seed)
             self.is_class_evaluator = True
 
         if self.config.regression_tasks is not None:
-            self.evaluator = RegrEvaluator(self.context, real=real_dataset, fake=fake_dataset,
+            self.evaluator = RegrEvaluator(self.context,
+                                           real=real_dataset,
+                                           fake=fake_dataset,
                                            seed=self.random_seed)
             self.is_regr_evaluator = True
 
         self.visual = [] if self.config.visual is None else self.config.visual
-        self.str2plotVisual = {"mean_std": self.plot_mean_std,
-                               "cumsums": self.plot_cumsums,
-                               "distributions": self.plot_distributions,
-                               "correlation": self.plot_correlation_difference,
-                               "pca": self.plot_pca}
+        # self.str2plotVisual = {"mean_std": self.plot_mean_std,
+        #                        "cumsums": self.plot_cumsums,
+        #                        "distributions": self.plot_distributions,
+        #                        "correlation": self.plot_correlation_difference,
+        #                        "pca": self.plot_pca}
 
         # statistical methods for numerical attributes
         self.numerical_statistics = [] if self.config.numerical_statistics is None \
             else self.config.numerical_statistics
-
-    def plot_mean_std(self):
-        """
-        Class wrapper function for plotting the mean and std using `viz.plot_mean_std`.
-        """
-        plot_mean_std(self.real, self.fake)
-
-    def plot_cumsums(self, nr_cols=4):
-        """
-        Plot the cumulative sums for all columns in the real and fake dataset. Height of each
-        row scales with the length of the labels. Each plot contains the
-        values of a real columns and the corresponding fake column.
-        """
-        nr_charts = len(self.real.columns)
-        nr_rows = max(1, nr_charts // nr_cols)
-        nr_rows = nr_rows + 1 if nr_charts % nr_cols != 0 else nr_rows
-
-        max_len = 0
-        # Increase the length of plots if the labels are long
-        if not self.real.select_dtypes(include=['object']).empty:
-            lengths = []
-            for d in self.real.select_dtypes(include=['object']):
-                lengths.append(max([len(x.strip()) for x in self.real[d].unique().tolist()]))
-            max_len = max(lengths)
-
-        row_height = 6 + (max_len // 30)
-        fig, ax = plt.subplots(nr_rows, nr_cols, figsize=(16, row_height * nr_rows))
-        fig.suptitle('Cumulative Sums per feature', fontsize=16)
-        axes = ax.flatten()
-        for i, col in enumerate(self.real.columns):
-            r = self.real[col]
-            f = self.fake.iloc[:, self.real.columns.tolist().index(col)]
-            cdf(r, f, col, 'Cumsum', ax=axes[i])
-        plt.tight_layout(rect=[0, 0.02, 1, 0.98])
-        plt.show()
-
-    def plot_distributions(self, nr_cols=3):
-        """
-        Plot the distribution plots for all columns in the real and fake dataset.
-        Height of each row of plots scales with the length of the labels. Each plot
-        contains the values of a real columns and the corresponding fake column.
-        """
-        nr_charts = len(self.real.columns)
-        nr_rows = max(1, nr_charts // nr_cols)
-        nr_rows = nr_rows + 1 if nr_charts % nr_cols != 0 else nr_rows
-
-        max_len = 0
-        # Increase the length of plots if the labels are long
-        if not self.real.select_dtypes(include=['object']).empty:
-            lengths = []
-            for d in self.real.select_dtypes(include=['object']):
-                lengths.append(max([len(x.strip()) for x in self.real[d].unique().tolist()]))
-            max_len = max(lengths)
-
-        row_height = 6 + (max_len // 30)
-        fig, ax = plt.subplots(nr_rows, nr_cols, figsize=(16, row_height * nr_rows))
-        fig.suptitle('Distribution per feature', fontsize=16)
-        axes = ax.flatten()
-        for i, col in enumerate(self.real.columns):
-            if col not in self.categorial_cols:
-                sns.distplot(self.real[col], ax=axes[i], label='Real')
-                sns.distplot(self.fake[col], ax=axes[i], color='darkorange', label='Fake')
-                axes[i].legend()
-            else:
-                real = self.real.copy()
-                fake = self.fake.copy()
-                real['kind'] = 'Real'
-                fake['kind'] = 'Fake'
-                concat = pd.concat([fake, real])
-                palette = sns.color_palette(
-                    [(0.8666666666666667, 0.5176470588235295, 0.3215686274509804),
-                     (0.2980392156862745, 0.4470588235294118, 0.6901960784313725)])
-                x, y, hue = col, "proportion", "kind"
-                ax = (concat[x]
-                      .groupby(concat[hue])
-                      .value_counts(normalize=True)
-                      .rename(y)
-                      .reset_index()
-                      .pipe((sns.barplot, "data"), x=x, y=y, hue=hue, ax=axes[i],
-                            saturation=0.8, palette=palette))
-                ax.set_xticklabels(axes[i].get_xticklabels(), rotation='vertical')
-        plt.tight_layout(rect=[0, 0.02, 1, 0.98])
-        plt.show()
-
-    def plot_correlation_difference(self, plot_diff=True, **kwargs):
-        """
-        Plot the association matrices for each table and, if chosen, the difference between them.
-
-        :param plot_diff: whether to plot the difference
-        :param kwargs: kwargs for sns.heatmap
-        """
-        plot_correlation_difference(self.real, self.fake,
-                                    cat_cols=self.categorial_cols,
-                                    plot_diff=plot_diff, **kwargs)
 
     def correlation_distance(self, how: str = 'euclidean') -> float:
         """
@@ -202,26 +115,6 @@ class DataEvaluator:
                                          theil_u=True)
 
         return distance_func(real_corr.values, fake_corr.values)
-
-    def plot_pca(self):
-        """
-        Plot the first two components of a PCA of real and fake data.
-        """
-        real = numerical_encoding(self.real, nominal_columns=self.categorial_cols)
-        fake = numerical_encoding(self.fake, nominal_columns=self.categorial_cols)
-        pca_r = PCA(n_components=2)
-        pca_f = PCA(n_components=2)
-
-        real_t = pca_r.fit_transform(real)
-        fake_t = pca_f.fit_transform(fake)
-
-        fig, ax = plt.subplots(1, 2, figsize=(12, 6))
-        fig.suptitle('First two components of PCA', fontsize=16)
-        sns.scatterplot(ax=ax[0], x=real_t[:, 0], y=real_t[:, 1])
-        sns.scatterplot(ax=ax[1], x=fake_t[:, 0], y=fake_t[:, 1])
-        ax[0].set_title('Real data')
-        ax[1].set_title('Fake data')
-        plt.show()
 
     def get_copies(self, return_len: bool = False) -> Union[pd.DataFrame, int]:
         """
@@ -291,99 +184,12 @@ class DataEvaluator:
 
         if lingress:
             corr, p, _ = get_score("pearsonr").score(self.pca_r.explained_variance_,
-                                                      self.pca_f.explained_variance_)
+                                                     self.pca_f.explained_variance_)
             return corr
         else:
             pca_error = get_score("mape").score(self.pca_r.explained_variance_,
                                                 self.pca_f.explained_variance_)
             return 1 - pca_error
-
-    def compute_numerical_statistics(self, lingress=True):
-        total_metrics = pd.DataFrame()
-        total_diff = None
-
-        columns_metrics = None
-        real_metrics = {}
-        fake_metrics = {}
-        for score in ['min', 'max', 'mean', 'median', 'std', 'var']:
-
-            real_score = getattr(self.real[self.numerical_cols], score)
-            fake_score = getattr(self.fake[self.numerical_cols], score)
-
-            for idx, value in real_score().items():
-                real_metrics[f'{score}_{idx}'] = value
-
-            for idx, value in fake_score().items():
-                fake_metrics[f'{score}_{idx}'] = value
-
-            if score in self.numerical_statistics:
-                score_stats = pd.concat([real_score(), fake_score()], axis=1)
-                score_stats.columns = [f'{score}_real', f'{score}_fake']
-                columns_metrics = score_stats if columns_metrics is None \
-                    else pd.concat([columns_metrics, score_stats], axis=1)
-                diff = (real_score() - fake_score()).abs().rename("sum_diff")
-                total_diff = diff if total_diff is None else total_diff + diff
-
-        columns_metrics = pd.concat([columns_metrics, total_diff], axis=1) \
-            if total_diff is not None else columns_metrics
-
-        total_metrics['real'] = real_metrics.values()
-        total_metrics['fake'] = fake_metrics.values()
-        total_metrics.index = real_metrics.keys()
-
-        if len(self.numerical_statistics) > 0:
-            self.logging.info(f'Basic statistical information of each numerical attribute: '
-                              f'\n {columns_metrics.to_string()}\n')
-
-        if lingress:
-            corr, p = get_score("spearmanr").score(total_metrics['real'], total_metrics['fake'])
-            return corr
-        else:
-            error = get_score("mape").score(total_metrics['real'], total_metrics['fake'])
-            return 1 - error
-
-    def compute_categorial_statistics(self, lingress=True):
-        total_metrics = pd.DataFrame()
-
-        def get_metrics(desc):
-            cols = desc.columns
-            index = desc.index
-            for _ in range(len(cols) - 1):
-                index = index.append(desc.index)
-
-            melt = desc.melt()
-
-            melt["name"] = melt['variable'] + "_" + index
-
-            return melt[['name', 'value']].set_index('name').to_dict()['value']
-
-        real_desc = self.real[self.categorial_cols].astype('category') \
-            .describe().transpose().drop(["count"], axis=1)
-        real_metrics = get_metrics(real_desc)
-
-        fake_desc = self.fake[self.categorial_cols].astype('category') \
-            .describe().transpose().drop(["count"], axis=1)
-        fake_metrics = get_metrics(fake_desc)
-
-        total_metrics['real'] = real_metrics.values()
-        total_metrics['fake'] = fake_metrics.values()
-        total_metrics.index = real_metrics.keys()
-
-        if len(self.numerical_statistics) > 0:
-            real_desc.columns = [f"{name}_real" for name in real_desc.columns]
-            fake_desc.columns = [f"{name}_fake" for name in fake_desc.columns]
-
-            _metrics = real_desc.join(fake_desc).sort_index(axis=1)
-            _metrics['freq_diff'] = _metrics['freq_real'] - _metrics['freq_fake']
-
-            self.logging.info(f'Basic statistical information of each categorial/ordinal '
-                              f'attribute: \n {_metrics.to_string()}\n')
-        if lingress:
-            corr, p = get_score("spearmanr").score(total_metrics['real'], total_metrics['fake'])
-            return corr
-        else:
-            error = get_score("mape").score(total_metrics['real'], total_metrics['fake'])
-            return 1 - error
 
     def statistical_evaluation(self) -> float:
         """
@@ -392,8 +198,98 @@ class DataEvaluator:
         values can differ a lot in magnitude, and Spearman's is more resilient to outliers.
         :return: correlation coefficient
         """
-        return (self.compute_numerical_statistics() * len(self.numerical_cols) +
-                self.compute_categorial_statistics() * len(self.categorial_cols)) / \
+
+        def compute_numerical_statistics(lingress=True):
+            total_metrics = pd.DataFrame()
+            total_diff = None
+
+            columns_metrics = None
+            real_metrics = {}
+            fake_metrics = {}
+            for score in ['min', 'max', 'mean', 'median', 'std', 'var']:
+
+                real_score = getattr(self.real[self.numerical_cols], score)
+                fake_score = getattr(self.fake[self.numerical_cols], score)
+
+                for idx, value in real_score().items():
+                    real_metrics[f'{score}_{idx}'] = value
+
+                for idx, value in fake_score().items():
+                    fake_metrics[f'{score}_{idx}'] = value
+
+                if score in self.numerical_statistics:
+                    score_stats = pd.concat([real_score(), fake_score()], axis=1)
+                    score_stats.columns = [f'{score}_real', f'{score}_fake']
+                    columns_metrics = score_stats if columns_metrics is None \
+                        else pd.concat([columns_metrics, score_stats], axis=1)
+                    diff = (real_score() - fake_score()).abs().rename("sum_diff")
+                    total_diff = diff if total_diff is None else total_diff + diff
+
+            columns_metrics = pd.concat([columns_metrics, total_diff], axis=1) \
+                if total_diff is not None else columns_metrics
+
+            total_metrics['real'] = real_metrics.values()
+            total_metrics['fake'] = fake_metrics.values()
+            total_metrics.index = real_metrics.keys()
+
+            if len(self.numerical_statistics) > 0:
+                self.logging.info(f'Basic statistical information of each numerical attribute: '
+                                  f'\n {columns_metrics.to_string()}\n')
+
+            if lingress:
+                corr, p = get_score("spearmanr").score(total_metrics['real'],
+                                                       total_metrics['fake'])
+                return corr
+            else:
+                error = get_score("mape").score(total_metrics['real'], total_metrics['fake'])
+                return 1 - error
+
+        def compute_categorial_statistics(lingress=True):
+            total_metrics = pd.DataFrame()
+
+            def get_metrics(desc):
+                cols = desc.columns
+                index = desc.index
+                for _ in range(len(cols) - 1):
+                    index = index.append(desc.index)
+
+                melt = desc.melt()
+
+                melt["name"] = melt['variable'] + "_" + index
+
+                return melt[['name', 'value']].set_index('name').to_dict()['value']
+
+            real_desc = self.real[self.categorial_cols].astype('category') \
+                .describe().transpose().drop(["count"], axis=1)
+            real_metrics = get_metrics(real_desc)
+
+            fake_desc = self.fake[self.categorial_cols].astype('category') \
+                .describe().transpose().drop(["count"], axis=1)
+            fake_metrics = get_metrics(fake_desc)
+
+            total_metrics['real'] = real_metrics.values()
+            total_metrics['fake'] = fake_metrics.values()
+            total_metrics.index = real_metrics.keys()
+
+            if len(self.numerical_statistics) > 0:
+                real_desc.columns = [f"{name}_real" for name in real_desc.columns]
+                fake_desc.columns = [f"{name}_fake" for name in fake_desc.columns]
+
+                _metrics = real_desc.join(fake_desc).sort_index(axis=1)
+                _metrics['freq_diff'] = _metrics['freq_real'] - _metrics['freq_fake']
+
+                self.logging.info(f'Basic statistical information of each categorial/ordinal '
+                                  f'attribute: \n {_metrics.to_string()}\n')
+            if lingress:
+                corr, p = get_score("spearmanr").score(total_metrics['real'],
+                                                       total_metrics['fake'])
+                return corr
+            else:
+                error = get_score("mape").score(total_metrics['real'], total_metrics['fake'])
+                return 1 - error
+
+        return (compute_numerical_statistics() * len(self.numerical_cols) +
+                compute_categorial_statistics() * len(self.categorial_cols)) / \
                (len(self.numerical_cols) + len(self.categorial_cols))
 
     def compute_distance(self, sample=3000):
@@ -485,11 +381,6 @@ class DataEvaluator:
                 fake[col] = 0
         fake = fake[columns]
 
-        # for column in real.columns.tolist():
-        #     if len(real[column].unique()) > 2:
-        #         real[column] = (real[column] - real[column].mean()) / real[column].std()
-        #         fake[column] = (fake[column] - fake[column].mean()) / fake[column].std()
-
         for column in self.numerical_cols:
             real[column] = (real[column] - real[column].mean()) / real[column].std()
             fake[column] = (fake[column] - fake[column].mean()) / fake[column].std()
@@ -520,7 +411,9 @@ class DataEvaluator:
         """
 
         for task in self.visual:
-            self.str2plotVisual[task]()
+            self.logging.info(f"Plot {task} ...")
+            get_plot(self.context, task)(self.real, self.fake,
+                                         self.numerical_cols, self.categorial_cols)
 
         # warnings.filterwarnings(action='ignore', category=ConvergenceWarning)
         # pd.options.display.float_format = '{:,.4f}'.format

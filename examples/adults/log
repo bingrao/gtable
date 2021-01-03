@@ -1,0 +1,144 @@
+[INFO] 2020-12-30 11:17:30 > Sampling GTABLESynthesizer
+[INFO] 2020-12-30 11:17:31 > Evaluation GTABLESynthesizer
+[INFO] 2020-12-30 11:18:37 > Basic statistical information of each numerical attribute:
+                 min_real      min_fake   max_real       max_fake      mean_real      mean_fake  median_real    median_fake       std_real       std_fake      var_real      var_fake      sum_diff
+age                 17.0     14.022073       90.0     103.370057      38.497585      40.425277         37.0      39.029533      13.618081      14.525259  1.854521e+02  2.109831e+02  4.674340e+01
+fnlwgt           12285.0 -15121.857792  1484705.0  935994.942872  190148.671875  182890.869146     178353.0  171419.045014  106203.476562  110437.091165  1.127918e+10  1.219635e+10  9.177669e+08
+education-num        1.0     -0.263785       16.0      17.277414      10.091619      10.075160         10.0       9.999455       2.575419       2.816354  6.632785e+00  7.931850e+00  4.098201e+00
+capital-gain         0.0     -0.001550    99999.0   99999.001341    1096.010498     787.121280          0.0       0.000155    7472.842285    6796.654112  5.584337e+07  4.619451e+07  9.649850e+06
+capital-loss         0.0     -0.001681     4356.0    2450.564125      85.095207      73.601918          0.0      -0.000004     398.238434     373.002748  1.585939e+05  1.391311e+05  2.140498e+04
+hours-per-week       1.0     -0.098913       99.0     107.195783      40.389301      39.900500         40.0      39.999870      12.406062      12.769472  1.539104e+02  1.630594e+02  1.929608e+01
+
+[INFO] 2020-12-30 11:18:37 > Basic statistical information of each categorial/ordinal attribute:
+                 freq_fake  freq_real  top_fake  top_real  unique_fake  unique_real  freq_diff
+workclass         14804.0    15645.0       0.0       0.0          9.0          9.0      841.0
+education          6617.0     7291.0       8.0       8.0         16.0         16.0      674.0
+marital-status     9651.0    10370.0       0.0       0.0          7.0          7.0      719.0
+occupation         3246.0     2883.0       1.0       0.0         15.0         15.0     -363.0
+relationship       8152.0     9122.0       0.0       0.0          6.0          6.0      970.0
+race              17757.0    19314.0       0.0       0.0          5.0          5.0     1557.0
+sex               15306.0    15117.0       0.0       0.0          2.0          2.0     -189.0
+native-country    18618.0    20195.0       0.0       0.0         41.0         41.0     1577.0
+income            17360.0    17088.0       0.0       0.0          2.0          2.0     -272.0
+
+[INFO] 2020-12-30 11:18:43 > Build evaluating datasets ...
+[INFO] 2020-12-30 11:18:43 > Fitting evaluating models ...
+[INFO] 2020-12-30 11:18:43 > Fitting real 1: XGBoostTask
+[11:18:44] WARNING: /home/conda/feedstock_root/build_artifacts/xgboost_1607604574104/work/src/learner.cc:1061: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective 'binary:logistic' was changed from 'error' to 'logloss'. Explicitly set eval_metric if you'd like to restore the old behavior.
+[INFO] 2020-12-30 11:18:46 > Fitting real 2: LogisticRegressionTask
+[INFO] 2020-12-30 11:18:47 > Fitting real 3: RandomForestClassifierTask
+[INFO] 2020-12-30 11:18:47 > Fitting real 4: DecisionTreeClassifierTask
+[INFO] 2020-12-30 11:18:47 > Fitting real 5: MLPClassifierTask
+[INFO] 2020-12-30 11:19:07 > Fitting fake: 1: XGBoostTask
+[11:19:09] WARNING: /home/conda/feedstock_root/build_artifacts/xgboost_1607604574104/work/src/learner.cc:1061: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective 'binary:logistic' was changed from 'error' to 'logloss'. Explicitly set eval_metric if you'd like to restore the old behavior.
+[INFO] 2020-12-30 11:19:20 > Fitting fake: 2: LogisticRegressionTask
+[INFO] 2020-12-30 11:19:20 > Fitting fake: 3: RandomForestClassifierTask
+[INFO] 2020-12-30 11:19:20 > Fitting fake: 4: DecisionTreeClassifierTask
+[INFO] 2020-12-30 11:19:21 > Fitting fake: 5: MLPClassifierTask
+[INFO] 2020-12-30 11:19:48 > Getting estimator scores ...
+[INFO] 2020-12-30 11:19:49 > Metrics score of Classifier tasks:
+                                 f1_score_real  f1_score_fake  recall_score_real  recall_score_fake  precision_score_real  precision_score_fake  jaccard_similarity
+index
+XGBoostTask_real                        0.8695         0.8264           0.663007           0.543497              0.755898              0.662719            0.809463
+XGBoostTask_fake                        0.8078         0.8234           0.437177           0.497418              0.623313              0.659065            0.788269
+LogisticRegressionTask_real             0.7932         0.7674           0.280828           0.095439              0.645631              0.551220            0.825484
+LogisticRegressionTask_fake             0.7730         0.7720           0.189759           0.098537              0.532609              0.553140            0.847063
+RandomForestClassifierTask_real         0.8488         0.8214           0.584037           0.492399              0.724084              0.666286            0.766160
+RandomForestClassifierTask_fake         0.8001         0.8126           0.403614           0.421687              0.604771              0.649007            0.766628
+DecisionTreeClassifierTask_real         0.8107         0.7868           0.622466           0.513514              0.596037              0.553734            0.638136
+DecisionTreeClassifierTask_fake         0.7460         0.7570           0.452238           0.501291              0.453408              0.478243            0.586294
+MLPClassifierTask_real                  0.7881         0.7928           0.132179           0.175253              0.830239              0.777154            0.960208
+MLPClassifierTask_fake                  0.7748         0.7736           0.096816           0.126506              0.595238              0.556818            0.960784
+
+[INFO] 2020-12-30 11:19:49 > Miscellaneous results:
+                                            Result
+RMSE Column Correlation Distance          0.057693
+MAE Column Correlation Distance          0.0298992
+Record Distance                           0.260542
+Mean Nearest Neighbor                      1.42481
+std Nearest Neighbor                      0.608552
+Duplicate rows between sets (real/fake)    (19, 0)
+
+[INFO] 2020-12-30 11:19:49 > Summary Results:
+                                                 Result
+Spearman correlation of basic statistics       0.954587
+Pearsonr correlation of column correlations    0.958996
+Mean of correlation between real/fake columns  0.900938
+MAPE 5 PCA components                          0.884655
+MAPE on Scores of classification tasks         0.881613
+Similarity Score [mean of all metrics]         0.916158
+
+
+
+[INFO] 2020-12-30 11:47:54 > Sampling CTGANSynthesizer
+[INFO] 2020-12-30 11:47:55 > Evaluation CTGANSynthesizer
+[INFO] 2020-12-30 11:48:57 > Basic statistical information of each numerical attribute:
+                 min_real     min_fake   max_real       max_fake      mean_real      mean_fake  median_real    median_fake       std_real      std_fake      var_real      var_fake      sum_diff
+age                 17.0    13.932854       90.0      83.236574      38.497585      37.790370         37.0      38.897966      13.618081     13.091817  1.854521e+02  1.713957e+02  2.701848e+01
+fnlwgt           12285.0  8062.050002  1484705.0  865897.740117  190148.171875  172887.819942     178353.0  165302.536354  106203.476562  97473.471883  1.127918e+10  9.501078e+09  1.778763e+09
+education-num        1.0     0.705283       16.0      16.550527      10.091619      10.028756         10.0       9.986409       2.575419      2.750452  6.632785e+00  7.564985e+00  2.028931e+00
+capital-gain         0.0   -58.274862    99999.0  109789.734719    1096.011353     762.164116          0.0      17.884843    7472.842285   6009.073174  5.584337e+07  3.610896e+07  1.974608e+07
+capital-loss         0.0    -3.257762     4356.0    2559.832955      85.095207      41.543602          0.0       0.198261     398.238434    280.230236  1.585939e+05  7.852898e+04  8.202606e+04
+hours-per-week       1.0     3.150157       99.0      98.201851      40.389301      38.902109         40.0      40.008608      12.406062     11.844958  1.539104e+02  1.403030e+02  1.861255e+01
+
+[INFO] 2020-12-30 11:48:57 > Basic statistical information of each categorial/ordinal attribute:
+                 freq_fake  freq_real  top_fake  top_real  unique_fake  unique_real  freq_diff
+workclass         16228.0    15645.0       0.0       0.0          9.0          9.0     -583.0
+education          6876.0     7291.0       8.0       8.0         16.0         16.0      415.0
+marital-status     9154.0    10370.0       0.0       0.0          7.0          7.0     1216.0
+occupation         3921.0     2883.0       4.0       0.0         15.0         15.0    -1038.0
+relationship       7979.0     9122.0       0.0       0.0          6.0          6.0     1143.0
+race              18734.0    19314.0       0.0       0.0          5.0          5.0      580.0
+sex               15515.0    15117.0       0.0       0.0          2.0          2.0     -398.0
+native-country    17453.0    20195.0       0.0       0.0         41.0         41.0     2742.0
+income            18690.0    17088.0       0.0       0.0          2.0          2.0    -1602.0
+
+[INFO] 2020-12-30 11:49:03 > Build evaluating datasets ...
+[INFO] 2020-12-30 11:49:03 > Fitting evaluating models ...
+[INFO] 2020-12-30 11:49:03 > Fitting real 1: XGBoostTask
+[11:49:04] WARNING: /home/conda/feedstock_root/build_artifacts/xgboost_1607604574104/work/src/learner.cc:1061: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective 'binary:logistic' was changed from 'error' to 'logloss'. Explicitly set eval_metric if you'd like to restore the old behavior.
+[INFO] 2020-12-30 11:50:55 > Fitting real 2: LogisticRegressionTask
+[INFO] 2020-12-30 11:50:56 > Fitting real 3: RandomForestClassifierTask
+[INFO] 2020-12-30 11:50:56 > Fitting real 4: DecisionTreeClassifierTask
+[INFO] 2020-12-30 11:50:57 > Fitting real 5: MLPClassifierTask
+[INFO] 2020-12-30 11:51:17 > Fitting fake: 1: XGBoostTask
+[11:51:19] WARNING: /home/conda/feedstock_root/build_artifacts/xgboost_1607604574104/work/src/learner.cc:1061: Starting in XGBoost 1.3.0, the default evaluation metric used with the objective 'binary:logistic' was changed from 'error' to 'logloss'. Explicitly set eval_metric if you'd like to restore the old behavior.
+[INFO] 2020-12-30 11:53:05 > Fitting fake: 2: LogisticRegressionTask
+[INFO] 2020-12-30 11:53:06 > Fitting fake: 3: RandomForestClassifierTask
+[INFO] 2020-12-30 11:53:07 > Fitting fake: 4: DecisionTreeClassifierTask
+[INFO] 2020-12-30 11:53:07 > Fitting fake: 5: MLPClassifierTask
+[INFO] 2020-12-30 11:53:22 > Getting estimator scores ...
+[INFO] 2020-12-30 11:53:23 > Metrics score of Classifier tasks:
+                                 f1_score_real  f1_score_fake  recall_score_real  recall_score_fake  precision_score_real  precision_score_fake  jaccard_similarity
+index
+XGBoostTask_real                        0.8695         0.8186           0.663007           0.331503              0.755898              0.772638            0.766941
+XGBoostTask_fake                        0.8342         0.8537           0.398007           0.366940              0.518321              0.620416            0.819340
+LogisticRegressionTask_real             0.7932         0.7674           0.280828           0.027027              0.645631              0.744186            0.826818
+LogisticRegressionTask_fake             0.8230         0.8294           0.164127           0.018171              0.448718              0.500000            0.893581
+RandomForestClassifierTask_real         0.8488         0.8125           0.584037           0.293497              0.724084              0.774805            0.757315
+RandomForestClassifierTask_fake         0.8295         0.8436           0.372802           0.285463              0.500393              0.585337            0.807501
+DecisionTreeClassifierTask_real         0.8107         0.7574           0.622466           0.381757              0.596037              0.484459            0.608881
+DecisionTreeClassifierTask_fake         0.7814         0.7821           0.460727           0.406213              0.383041              0.372781            0.627472
+MLPClassifierTask_real                  0.7881         0.7703           0.132179           0.033784              0.830239              0.898876            0.944012
+MLPClassifierTask_fake                  0.8306         0.8308           0.096717           0.029308              0.518868              0.581395            0.954652
+
+[INFO] 2020-12-30 11:53:23 > Miscellaneous results:
+                                            Result
+RMSE Column Correlation Distance         0.0645739
+MAE Column Correlation Distance          0.0381437
+Record Distance                           0.222699
+Mean Nearest Neighbor                      1.53434
+std Nearest Neighbor                      0.699467
+Duplicate rows between sets (real/fake)    (19, 0)
+
+[INFO] 2020-12-30 11:53:23 > Summary Results:
+                                                 Result
+Spearman correlation of basic statistics       0.984146
+Pearsonr correlation of column correlations    0.924062
+Mean of correlation between real/fake columns  0.850480
+MAPE 5 PCA components                          0.765115
+MAPE on Scores of classification tasks         0.784543
+Similarity Score [mean of all metrics]         0.861669
+
+
+

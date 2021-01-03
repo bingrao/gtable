@@ -73,12 +73,6 @@ def dataset_opts(parser):
                    'it will take the minimal length of both datasets and cut '
                    'the larger one off to make sure they are the same length.')
 
-    # group.add('--attrib_num', '-attrib_num', type=int, default=0,
-    #           help="The number of columns in the dataset. Used if the Classifer NN is active.")
-
-    # parser.add_argument('-t', '--tsv', action='store_true',
-    #                     help='Load data in TSV format instead of CSV')
-
     group.add_argument('--header', '-header', dest='header', action='store_false',
                        help='The CSV file has no header. Discrete columns will be indices.')
 
@@ -155,6 +149,9 @@ def model_opts(parser):
     group.add("--gen_layers", "-gen_layers", type=int, default=2,
               help="The number of generator layers")
 
+    group.add("--gen_attention", "-gen_attention", default=False, action="store_true",
+              help="Enable generator's Self-attention ")
+
     group.add("--gen_dim", "-gen_dim", type=int, default=256,
               help="The dimention of a generator layer")
 
@@ -167,6 +164,19 @@ def model_opts(parser):
     group.add("--dis_pack", "-dis_pack", type=int, default=10,
               help="The number of packages in a discriminator layer")
 
+    group.add("--dis_attention", "-dis_attention", default=False, action="store_true",
+              help="Enable discriminator's Self-attention")
+
+    group.add("--gtable_model", "-gtable_model", type=str, default='gtable_stardard',
+              choices=['gtable_standard', 'gtable_attention'],
+              help="Enable discriminator's Self-attention")
+
+    group.add("--head", "-head", type=int, default=2,
+              help="The number of head in multiple attention head")
+
+    group.add('--dropout', '-dropout', type=float, default=0.1,
+              help="the ratio of Drop model")
+
 
 def optimizer_opts(parser):
     # learning rate
@@ -176,7 +186,7 @@ def optimizer_opts(parser):
               choices=['sgd', 'adagrad', 'adadelta', 'adam'],
               help="Optimization method.")
 
-    group.add('--learning_rate', '-learning_rate', type=float, default=1e-4,
+    group.add('--learning_rate', '-learning_rate', type=float, default=1e-5,
               help="Starting learning rate. "
                    "Recommended settings: sgd = 1, adagrad = 0.1, "
                    "adadelta = 1, adam = 0.001")
@@ -305,8 +315,9 @@ def train_opts(parser):
               help='Critic updates per generator update.')
 
 
-def generation_opts(parser):
-    group = parser.add_argument_group('Generation')
+# def generation_opts(parser):
+#     # group = parser.add_argument_group('Generation')
+#     pass
 
 
 def evaluate_opts(parser):
@@ -332,7 +343,7 @@ def evaluate_opts(parser):
               help="The calcuate the score of y and y_pred for regression task")
 
     group.add('--visual', '-visual', type=str, nargs='+', default=None,
-              choices=['mean_std', 'cumsums', 'distributions', 'correlation', 'pca'],
+              choices=['mean_std', 'cumsums', 'distributions', 'correlation', 'pca', 'variance'],
               help="The visual measures to show statistics of real and fake datasets")
 
     group.add('--numerical_statistics', '-numerical_statistics', type=str, nargs='+',

@@ -1,8 +1,8 @@
 generation:
   app: "TVAE"
   run_type: "generation"
-  real_data: /home/forcebot/project/gtable/examples/adults/data/adult.npz
-  metadata: /home/forcebot/project/gtable/examples/adults/data/adult.json
+  real_data: examples/adults/data/adult.npz
+  metadata: examples/adults/data/adult.json
   data_type: "numpy"
 
   save_checkpoints_steps: 1000
@@ -10,30 +10,40 @@ generation:
   cuda_visible_devices: 2
   g_penalty: 1.0
   n_critic: 1
-  output: /home/forcebot/project/gtable/examples/adults/output/fake_adults_tvae.csv
-  numerical_embeddding: 'Bayesian_Gaussian_Norm'
+  output: examples/adults/output/fake_adults_tvae.csv
+
+  transformer_type: "gmm"
+  numerical_embeddding: 'Gaussian_Norm'
+  ordinal_embeddding: 'One_Hot'
+  categorial_embeddding: 'One_Hot'
+  noise: "normal"
+
+
   optim: adam
   learning_rate: 2e-4
   adam_beta1: 0.5
   adam_beta2: 0.9
 
-  transformer_type: "gmm"
-
   features_col: ['age', 'workclass', 'fnlwgt', 'education', 'education-num', 'marital-status',
                  'occupation', 'relationship', 'race', 'sex', 'capital-gain', 'capital-loss',
                  'hours-per-week', 'native-country']
+
   target_col: 'income'
+
   classify_tasks: ['xgboost', 'logistic_regression', 'random_forest', 'decision_tree', 'mlp']
+
   classify_scores: [ 'F1_Score', 'Recall_Score', 'Precision_Score']
+
   numerical_statistics: ['min', 'max', 'mean', 'median', 'std', 'var']
+
 evaluate:
   app: "TVAE"
   run_type: "evaluate"
   transformer_type: "gmm"
   data_type: "numpy"
-  real_data: /home/forcebot/project/gtable/examples/adults/data/adult.npz
-  fake_data: /home/forcebot/project/gtable/examples/adults/data/adult.npz
-  metadata: /home/forcebot/project/gtable/examples/adults/data/adult.json
+  real_data: examples/adults/data/adult.npz
+  fake_data: examples/adults/data/adult.npz
+  metadata: examples/adults/data/adult.json
 
   features_col: ['age', 'workclass', 'fnlwgt', 'education', 'education-num', 'marital-status',
                  'occupation', 'relationship', 'race', 'sex', 'capital-gain', 'capital-loss',

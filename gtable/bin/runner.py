@@ -87,13 +87,23 @@ class Runner(object):
             with open(self.context.metadata) as meta_file:
                 self.metadata = json.load(meta_file)
 
+        assert self.metadata is not None, \
+            f"The input metadata data is empty: {self.context.metadata}"
+
         if self.context.real_data is not None and os.path.exists(self.context.real_data):
             self.logging.info(f"Loading real dataset: {self.context.real_data} ...")
             self.real_dataset = self.load_dataset(self.context.real_data, self.metadata)
+        else:
+            self.logging.info(f"The real dataset does not exist: {self.context.real_data}")
 
         if self.context.fake_data is not None and os.path.exists(self.context.fake_data):
             self.logging.info(f"Loading fake dataset: {self.context.fake_data} ...")
             self.fake_dataset = self.load_dataset(self.context.fake_data, self.metadata)
+        else:
+            self.logging.info(f"The fake dataset does not exist: {self.context.fake_data}")
+
+        assert self.real_dataset is not None, \
+            f"The inpu real data is empty: {self.context.real_data}"
 
     def load_dataset(self, path, metadata):
         data_loader = get_data_loader(self.context)
