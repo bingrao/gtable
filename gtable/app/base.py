@@ -101,4 +101,3 @@ class BaseSynthesizer:
         # self.logging.info(f"Score: \n {scores}")
 
         self.evaluate(dataset, fake_dataset)
-

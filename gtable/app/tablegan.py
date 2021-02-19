@@ -10,7 +10,6 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from gtable.utils.constants import CATEGORICAL
 from gtable.app.base import BaseSynthesizer
-from gtable.data.transformer import TableganTransformer
 
 
 class Discriminator(Module):
@@ -219,7 +218,8 @@ class TableganSynthesizer(BaseSynthesizer):
                 else:
                     loss_c = None
 
-            self.logging.info(f"Epoch {i} / {self.epochs}, \t loss_d: {loss_d:.4f}, \tloss_g: {loss_g:.4f}, \tloss_c: {loss_c}")
+            self.logging.info(f"Epoch {i} / {self.epochs}, \t loss_d: {loss_d:.4f}, "
+                              f"\tloss_g: {loss_g:.4f}, \tloss_c: {loss_c}")
 
     def sample(self, num_samples, **kwargs):
         self.generator.eval()

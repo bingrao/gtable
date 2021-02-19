@@ -3,6 +3,7 @@ generation:
   run_type: "generation"
   real_data: examples/adults/data/adult.npz
   metadata: examples/adults/data/adult.json
+  output: examples/adults/output
   data_type: "numpy"
 
   save_checkpoints_steps: 1000
@@ -10,7 +11,7 @@ generation:
   cuda_visible_devices: 2
   g_penalty: 1.0
   n_critic: 1
-  output: examples/adults/output/fake_adults_gtable.csv
+
 
   transformer_type: "gmm"
   numerical_embeddding: 'Gaussian_Norm'
@@ -18,9 +19,10 @@ generation:
   categorial_embeddding: 'One_Hot'
   noise: "normal"
 
+  gtable_model: "gtable_standard"
   gen_layers: 2
   dis_layers: 2
-  gtable_model: "gtable_standard"
+
 
   optim: adam
   learning_rate: 2e-4
@@ -47,6 +49,7 @@ evaluate:
   real_data: examples/adults/data/adult.npz
   fake_data: examples/adults/data/adult.npz
   metadata: examples/adults/data/adult.json
+  output: examples/adults/output
 
   features_col: ['age', 'workclass', 'fnlwgt', 'education', 'education-num', 'marital-status',
                  'occupation', 'relationship', 'race', 'sex', 'capital-gain', 'capital-loss',
@@ -56,10 +59,6 @@ evaluate:
   classify_tasks: ['xgboost', 'logistic_regression', 'random_forest', 'decision_tree', 'mlp']
   classify_scores: [ 'F1_Score', 'Recall_Score', 'Precision_Score']
 
-#  regression_tasks: ['random_forest_regr', 'lasso', 'ridge', 'elastic_net']
-#  regression_scores: ['mse', 'mae', 'mape', 'rmse']
-
-#  visual: ['mean_std', 'cumsums', 'distributions', 'correlation', 'pca']
-#  visual: ['correlation']
-
   numerical_statistics: ['min', 'max', 'mean', 'median', 'std', 'var']
+
+  visual: ['mean_std', 'cumsums', 'distributions', 'correlation', 'pca', 'variance']
