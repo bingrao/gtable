@@ -110,12 +110,11 @@ def dataset_opts(parser):
 
     group.add('--numerical_embeddding', '-numerical_embeddding', type=str,
               default='Bayesian_Gaussian_Norm',
-              choices=['Bayesian_Gaussian_Norm', 'Gaussian_Norm',
-                       'MinMax_Norm', 'KBins_Discretizer', 'Power_Transformer'],
+              choices=['Bayesian_Gaussian_Norm', 'Gaussian_Norm', 'MinMax_Norm'],
               help="The way to normalize the numerical dataset")
 
     group.add('--categorial_embeddding', '-categorial_embeddding', type=str,
-              choices=['Ordinal', 'MinMax_Norm', 'One_Hot'], default='One_Hot',
+              choices=['One_Hot'], default='One_Hot',
               help="The way to normalize the categorial discrete dataset")
 
     group.add('--ordinal_embeddding', '-ordinal_embeddding', type=str,
@@ -165,7 +164,7 @@ def model_opts(parser):
     gtable.add("--dis_dim", "-dis_dim", type=int, default=256,
                help="The dimention of a discriminator layer")
 
-    gtable.add("--dis_pack", "-dis_pack", type=int, default=1,
+    gtable.add("--dis_pack", "-dis_pack", type=int, default=10,
                help="The number of packages in a discriminator layer")
 
     gtable.add("--dis_attention", "-dis_attention", default=False, action="store_true",

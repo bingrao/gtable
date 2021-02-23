@@ -7,10 +7,10 @@ generation:
   data_type: "numpy"
 
   save_checkpoints_steps: 1000
-  epochs: 50
+  epochs: 150
   cuda_visible_devices: 2
-  g_penalty: 1.0
-  n_critic: 1
+  g_penalty: 3.0
+  n_critic: 5
 
 
   transformer_type: "gmm"
@@ -22,7 +22,7 @@ generation:
   gtable_model: "gtable_transformer"
   gen_layers: 2
   dis_layers: 2
-  condition_generator: False
+
 
   optim: adam
   learning_rate: 2e-4
@@ -62,3 +62,4 @@ evaluate:
   numerical_statistics: ['min', 'max', 'mean', 'median', 'std', 'var']
 
   visual: ['mean_std', 'cumsums', 'distributions', 'correlation', 'pca', 'variance']
+

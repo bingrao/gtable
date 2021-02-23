@@ -6,7 +6,7 @@ import torch
 
 
 class Discriminator(Module):
-    def __init__(self, name, input_dim, output_dim, n_col, opt, metadata=None):
+    def __init__(self, name, input_dim, output_dim, n_col, opt):
         """
         (input_dim * pack) --> DiscriminatorLayer --> DiscriminatorLayer --> Linear--> (1)
         DiscriminatorLayer: Linear --> LeakyReLU --> Dropout
@@ -16,7 +16,7 @@ class Discriminator(Module):
         self.pack = opt.dis_pack
         self._input_dim = input_dim * self.pack
         self._output_dim = output_dim
-        self.metadata = metadata
+
         # nums of columns in orginal dataset and conditional dataset
         self.n_col = n_col
 
@@ -81,7 +81,7 @@ class StandardDiscriminatorLayer(Module):
 
 @register_disc(name="gtable_standard")
 class StandardDiscriminator(Discriminator):
-    def __init__(self, input_dim, output_dim, n_col, opt, metadata=None):
+    def __init__(self, input_dim, output_dim, n_col, opt):
         """
         (input_dim * pack) --> DiscriminatorLayer --> DiscriminatorLayer --> Linear--> (1)
         DiscriminatorLayer: Linear --> LeakyReLU --> Dropout
@@ -90,8 +90,7 @@ class StandardDiscriminator(Discriminator):
                                                     input_dim,
                                                     output_dim,
                                                     n_col,
-                                                    opt,
-                                                    metadata)
+                                                    opt)
 
     def build_model(self):
         dim = self._input_dim
@@ -139,7 +138,7 @@ class AttentionDiscriminatorLayer(Module):
 
 @register_disc(name="gtable_attention")
 class AttentionDiscriminator(Discriminator):
-    def __init__(self, input_dim, output_dim, n_col, opt, metadata=None):
+    def __init__(self, input_dim, output_dim, n_col, opt):
         """
         (input_dim * pack) --> DiscriminatorLayer --> DiscriminatorLayer --> Linear--> (1)
         DiscriminatorLayer: Linear --> LeakyReLU --> Dropout
@@ -151,8 +150,7 @@ class AttentionDiscriminator(Discriminator):
                                                      input_dim,
                                                      output_dim,
                                                      n_col,
-                                                     opt,
-                                                     metadata)
+                                                     opt)
 
     def build_model(self):
         dim = self._input_dim
@@ -172,7 +170,7 @@ class AttentionDiscriminator(Discriminator):
 
 @register_disc(name="gtable_transformer")
 class TransformerDiscriminator(Discriminator):
-    def __init__(self, input_dim, output_dim, n_col, opt, metadata=None):
+    def __init__(self, input_dim, output_dim, n_col, opt):
         """
         (input_dim * pack) --> DiscriminatorLayer --> DiscriminatorLayer --> Linear--> (1)
         DiscriminatorLayer: Linear --> LeakyReLU --> Dropout
@@ -184,16 +182,13 @@ class TransformerDiscriminator(Discriminator):
                                                        input_dim,
                                                        output_dim,
                                                        n_col,
-                                                       opt,
-                                                       metadata)
+                                                       opt)
 
     def build_model(self):
         return TransformerEncoder(input_dim=self._input_dim,
                                   output_dim=self._output_dim,
                                   n_col=self.n_col,
-                                  opt=self.config,
-                                  metadata=self.metadata,
-                                  is_generator=False)
+                                  opt=self.config)
     # def build_model(self):
     #     dim = self._input_dim
     #     seq = []
@@ -216,3 +211,4 @@ def get_discriminator(name):
         raise ValueError("No Embedding model associated with the name: {}".format(name))
     else:
         return _class
+

@@ -10,11 +10,9 @@ class RandomSampler(Sampler):
     def __init__(self, data, output_info):
         super(RandomSampler, self).__init__()
         self.data = data
+        self.model = []
         self.n = len(data)
-        self.model = self.build_sample_model(data, output_info)
 
-    def build_sample_model(self, data, output_info):
-        sample_model = []
         st = 0
         skip = False
         for item in output_info:
@@ -33,22 +31,18 @@ class RandomSampler(Sampler):
                 for j in range(item[0]):
                     tmp.append(np.nonzero(data[:, st + j])[0])  # The indice of non-zero elements
 
-                sample_model.append(tmp)
+                self.model.append(tmp)
                 st = ed
             else:
                 assert 0
 
         assert st == data.shape[1]
 
-        return sample_model
-
     def sample(self, n, col=None, opt=None):
         """
-            n: The size of a batch, e.g. 500
-            col: [batch_size, ], e.g. (500,)
-                 The index of categorial column is selected among categorial columns
-            opt: [batch_size, ], e.g. (500,)
-                 The index of category is selected in a categorial column
+            n:
+            col:
+            opt:
         """
         if col is None:
             idx = np.random.choice(np.arange(self.n), n)

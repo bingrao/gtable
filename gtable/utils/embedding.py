@@ -13,11 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# https://towardsdatascience.com/understanding-feature-engineering-part-1-continuous-numeric-data-da4e47099a7b
-
 from sklearn.mixture import BayesianGaussianMixture, GaussianMixture
-from sklearn.preprocessing import KBinsDiscretizer, MinMaxScaler, OneHotEncoder, \
-    OrdinalEncoder, PowerTransformer
+from sklearn.preprocessing import MinMaxScaler, OneHotEncoder, OrdinalEncoder
 from gtable.utils.misc import ClassRegistry
 import numpy as np
 import abc
@@ -198,56 +195,6 @@ class GaussianEmbedding(Embedding):
         return column
 
 
-@register_embedding(name="kbins_discretizer")
-class KBinsEmbedding(Embedding):
-    def __init__(self, column):
-        self.components = None
-        self.n_bins = (column['max'] - column['min']) % 100
-        super(KBinsEmbedding, self).__init__("kbins_discretizer", column)
-
-    def build_model(self):
-        return KBinsDiscretizer(
-            n_bins=self.n_bins, encode='ordinal', strategy='kmeans')
-
-    def fit(self, data):
-        self.model.fit(data)
-        self.components = 1
-        self.output_info = [(self.components, 'tanh')]
-        self.output_dimensions = self.components
-
-    def transform(self, data):
-        output = self.model.transform(data)
-        return output
-
-    def inverse_transform(self, data, sigma):
-        output = self.model.inverse_transform(data)
-        return output
-
-
-@register_embedding(name="power_transformer")
-class PowerTransEmbedding(Embedding):
-    def __init__(self, column):
-        self.components = None
-        super(PowerTransEmbedding, self).__init__("power_transformer", column)
-
-    def build_model(self):
-        return PowerTransformer()
-
-    def fit(self, data):
-        self.model.fit(data)
-        self.components = 1
-        self.output_info = [(self.components, 'tanh')]
-        self.output_dimensions = self.components
-
-    def transform(self, data):
-        output = self.model.transform(data)
-        return output
-
-    def inverse_transform(self, data, sigma):
-        output = self.model.inverse_transform(data)
-        return output
-
-
 @register_embedding(name="minmax_norm")
 class MinMaxScalarEmbedding(Embedding):
     def __init__(self, column):
@@ -301,7 +248,7 @@ class OrdinalEmbedding(Embedding):
     def fit(self, data):
         self.model.fit(data)
         self.components = data.shape[1]
-        self.output_info = [(self.components, 'softmax')]
+        self.output_info = [(self.components, 'tanh')]
         self.output_dimensions = self.components
 
     def transform(self, data):
@@ -317,3 +264,4 @@ def build_embedding(name, item):
         raise ValueError("No Embedding model associated with the name: {}".format(name))
     else:
         return embedding_class(item)
+
