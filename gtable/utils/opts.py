@@ -110,11 +110,12 @@ def dataset_opts(parser):
 
     group.add('--numerical_embeddding', '-numerical_embeddding', type=str,
               default='Bayesian_Gaussian_Norm',
-              choices=['Bayesian_Gaussian_Norm', 'Gaussian_Norm', 'MinMax_Norm'],
+              choices=['Bayesian_Gaussian_Norm', 'Gaussian_Norm',
+                       'MinMax_Norm', 'KBins_Discretizer', 'Power_Transformer'],
               help="The way to normalize the numerical dataset")
 
     group.add('--categorial_embeddding', '-categorial_embeddding', type=str,
-              choices=['One_Hot'], default='One_Hot',
+              choices=['Ordinal', 'MinMax_Norm', 'One_Hot'], default='One_Hot',
               help="The way to normalize the categorial discrete dataset")
 
     group.add('--ordinal_embeddding', '-ordinal_embeddding', type=str,

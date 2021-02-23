@@ -62,16 +62,25 @@ class Transformer(abc.ABC):
         self.numerical_embeddding = ctx.config.numerical_embeddding
         self.categorial_embeddding = ctx.config.categorial_embeddding
         self.ordinal_embeddding = ctx.config.ordinal_embeddding
+        self.embedding_combine = ctx.config.embedding_combine
 
-    def get_embedding_name(self, atts_type):
+    def get_embedding_name(self, item, data):
+        atts_type = item['type']
         if self.unify_embedding is not None:
             embedding_name = self.unify_embedding
         elif atts_type == NUMERICAL:
             embedding_name = self.numerical_embeddding
+            item['min'] = np.min(data)
+            item['max'] = np.max(data)
+            item['mean'] = np.mean(data)
         elif atts_type == CATEGORICAL:
             embedding_name = self.categorial_embeddding
-        else:
+            item['size'] = len(np.unique(data))
+        elif atts_type == ORDINAL:
             embedding_name = self.ordinal_embeddding
+            item['size'] = len(np.unique(data))
+        else:
+            embedding_name = self.unify_embedding
 
         return embedding_name
 
@@ -286,9 +295,11 @@ class GMMTransformer(Transformer):
     def fit(self, data):
         for idx, item in enumerate(self.metadata['columns']):
             column_data = data[:, idx].reshape([-1, 1])
-            embedding_name = self.get_embedding_name(item['type'])
+            embedding_name = self.get_embedding_name(item, column_data)
             meta = build_embedding(embedding_name, item)
             meta.fit(column_data)
+            item['output_dimensions'] = meta.output_dimensions
+            item['output_info'] = meta.output_info
             self.output_info += meta.output_info
             self.output_dimensions += meta.output_dimensions
             self.meta.append(meta)
@@ -613,4 +624,3 @@ def build_transformer(ctx, metadata):
     if transformer_class is None:
         raise ValueError("No scorer associated with the name: {}".format(name))
     return transformer_class(ctx, name, metadata)
-

@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
+from gtable.utils.constants import NUMERICAL
 
 
 def attention(query, key, value, mask=None, dropout=None):
@@ -131,6 +132,75 @@ class Generator(nn.Module):
         return self.proj(x.reshape((-1, self.input_channel)))
 
 
+class GenGenerator(nn.Module):
+    """Define standard linear + softmax generation step."""
+
+    def __init__(self, input_dim, n_col, output_channel, metadata, device):
+        super(GenGenerator, self).__init__()
+        self.metadata = metadata
+        self.input_channel = n_col * input_dim
+        self.flatten = nn.Flatten()
+        self.proj = nn.Linear(self.input_channel, output_channel)
+
+        # Generator
+        self.gen_columns = []
+        output_info = [item['output_info'][0] for item in self.metadata['columns']]
+        col_size = [1 if item['type'] == NUMERICAL else item['size']
+                    for item in self.metadata['columns']]
+
+        for idx, (_, fn) in enumerate(output_info):
+            if fn == 'tanh':
+                act_fn = nn.Tanh()
+            elif fn == 'softmax':
+                act_fn = nn.LogSoftmax(dim=-1)
+            else:
+                act_fn = nn.Softmax(dim=-1)
+
+            self.gen_columns.append(nn.Sequential(nn.Linear(input_dim, col_size[idx]),
+                                                  act_fn).to(device))
+
+    def forward(self, x):
+        # return F.log_softmax(self.proj(x), dim=-1)
+        # return F.relu(self.proj(x))
+        # outputs = []
+        # for idx, model in enumerate(self.gen_columns):
+        #     output = model(x[:, idx, :])
+        #     if output.shape[-1] > 1:
+        #         _, output = torch.max(output, dim=-1)
+        #         output = output.unsqueeze(-1)
+        #     outputs.append(output)
+        # return torch.cat(outputs, dim=-1)
+        x = self.flatten(x)
+        x = self.proj(x)
+        return x
+
+
+class DiscGenerator(nn.Module):
+    """Define standard linear + softmax generation step."""
+
+    def __init__(self, input_dim, n_col, output_channel, metadata, device):
+        super(DiscGenerator, self).__init__()
+        self.metadata = metadata
+        self.input_channel = n_col * input_dim
+        self.flatten = nn.Flatten()
+        self.f1 = nn.Linear(self.input_channel, input_dim)
+        self.norm = LayerNorm(input_dim)
+        self.f2 = nn.Linear(input_dim, output_channel)
+
+        self.flatten = nn.Flatten()
+        self.input_channel = n_col * input_dim
+        self.proj = nn.Linear(self.input_channel, output_channel)
+
+    def forward(self, x):
+        # x = self.flatten(x)
+        # x = self.f1(x)
+        # x = self.norm(x)
+        # return F.relu(self.f2(x))
+        x = self.flatten(x)
+        x = self.proj(x)
+        return x
+
+
 class PositionwiseFeedForward(nn.Module):
     """
     In addition to attention sub-layers, each of the layers in our encoder and decoder contains
@@ -138,7 +208,8 @@ class PositionwiseFeedForward(nn.Module):
     identically. This consists of two linear transformations with a ReLU activation in between.
 
     While the linear transformations are the same across different positions, they use different
-    parameters from layer to layer. Another way of describing this is as two convolutions with kernel
+    parameters from layer to layer. Another way of describing this is as two convolutions
+    with kernel
     size 1. The dimensionality of input and output is $d_{\text{model}}=512$, and the inner-layer
     has dimensionality $d_{ff}=2048$.
 
@@ -152,18 +223,19 @@ class PositionwiseFeedForward(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.relu = nn.ReLU()
 
-        self.feed_forward = nn.Sequential(self.w_1, self.dropout, self.relu, self.w_2, self.dropout)
+        self.feed_forward = nn.Sequential(self.w_1, self.dropout, self.relu, self.w_2,
+                                          self.dropout)
 
         # Solution 2: https://nlp.seas.harvard.edu/2018/04/03/attention.html
         # self.w_2(self.dropout(F.relu(self.w_1(x))))
-        self.feed_forward_simply = nn.Sequential(self.w_1, self.relu, self.dropout, self.w_2)
+        # self.feed_forward_simply = nn.Sequential(self.w_1, self.relu, self.dropout, self.w_2)
 
     def forward(self, x):
         """
         Args:
              x: (batch_size, seq_len, d_model)
         """
-        return self.feed_forward_simply(x)
+        return self.feed_forward(x)
 
 
 # Position of input source/target word embedding
@@ -190,12 +262,14 @@ class PositionalEncoding(torch.nn.Module):
         # Here max_len means the max number of words can hold by a input sentense.
         # We create refer table [[pe]] with 3D dimension (1, max_len, d_model),
         position = torch.arange(0, max_windows_size).unsqueeze(1)  # dim: (max_len, 1)
-        div_term = torch.exp((torch.arange(0, d_model, 2) *      # tensor([ 0,  2,  4, ..., d_model])
-                             (-math.log(10000.0) / d_model)).float())  #
+        div_term = torch.exp((torch.arange(0, d_model, 2) *  # tensor([ 0,  2,  4, ..., d_model])
+                              (-math.log(10000.0) / d_model)).float())  #
         # In index of numpy or tensor, start:end:step  0:d_model:2 = 0:-1:2
         # position.float() * div_term --> dim: (max_len, d_model/2)
-        pe[:, 0::2] = torch.sin(position.float() * div_term)  # Replace values in the even position of cols: [0, 2, ..]
-        pe[:, 1::2] = torch.cos(position.float() * div_term)  # Replace values in the odd positions of cols: [1, 3, ..]
+        # Replace values in the even position of cols: [0, 2, ..]
+        pe[:, 0::2] = torch.sin(position.float() * div_term)
+        # Replace values in the odd positions of cols: [1, 3, ..]
+        pe[:, 1::2] = torch.cos(position.float() * div_term)
         pe = pe.unsqueeze(0)  # dim: (1, max_len, d_model)
         self.register_buffer('pe', pe)
 
@@ -242,10 +316,170 @@ class TransformerEmbeddings(torch.nn.Module):
         return x_embedding_with_pos
 
 
+class GeneratorEmbeddings(torch.nn.Module):
+    def __init__(self, input_dim, output_dim, latent_dim, dropout,
+                 n_col, metadata, device, max_windows_size=1000):
+        super(GeneratorEmbeddings, self).__init__()
+
+        self.latent_dim = latent_dim
+        self.output_dim = output_dim
+        self.n_col = n_col
+        self.metadata = metadata
+        self.proj = nn.Linear(input_dim, self.n_col * output_dim)
+
+        self.embedding_layers = []
+        self.internal = []
+        interal_start = 0
+        nums_col = len(metadata['columns'])
+
+        self.embedding_layers.append(nn.Linear(latent_dim, nums_col * output_dim).to(device))
+        self.internal.append((interal_start, interal_start + latent_dim))
+        interal_start = interal_start + latent_dim
+        n_col = n_col - nums_col
+
+        if n_col > 0:
+            col_size = [1 if item['type'] == NUMERICAL else item['size']
+                        for item in metadata['columns']]
+
+            discrete_size = [item['size'] for item in metadata['columns']
+                             if item['type'] != NUMERICAL]
+
+            col_output_dims = [1 if item['type'] == NUMERICAL else item['output_dimensions']
+                               for item in metadata['columns']]
+
+            discrete_output_dims = [item['output_dimensions'] for item in metadata['columns']
+                                    if item['type'] != NUMERICAL]
+
+            if n_col >= nums_col:
+                _size = col_size + discrete_size
+                _output_dims = col_output_dims + discrete_output_dims
+            else:
+                _size = discrete_size
+                _output_dims = discrete_output_dims
+
+            for col_idx in range(n_col):
+                if _size[col_idx] == 1:
+                    self.embedding_layers.append(nn.Linear(1, output_dim).to(device))
+                else:
+                    self.embedding_layers.append(nn.Embedding(_size[col_idx],
+                                                              output_dim).to(device))
+
+                self.internal.append((interal_start, interal_start + _output_dims[col_idx]))
+                interal_start = interal_start + _output_dims[col_idx]
+
+        self.l1 = nn.Linear(output_dim, 1024)
+        self.dropout1 = nn.Dropout(0.1)
+        self.bn1 = nn.BatchNorm1d(1024)
+
+        self.l2 = nn.Linear(1024, 512)
+        self.dropout2 = nn.Dropout(0.3)
+        self.bn2 = nn.BatchNorm1d(512)
+
+        self.l3 = nn.Linear(512, output_dim)
+
+        self.positional_embedding = PositionalEncoding(output_dim, dropout, max_windows_size)
+
+    def forward(self, x):
+
+        # embeddings = []
+        # for i, (s, e) in enumerate(self.internal):
+        #     em_output = self.embedding_layers[i](x[:, s:e])
+        #     if i == 0:
+        #         em_output = em_output.reshape((em_output.shape[0], -1, self.output_dim))
+        #     embeddings.append(em_output)
+        #
+        # x = F.relu(torch.cat(embeddings, dim=1))
+        #
+        # x = F.relu(self.l1(x))
+        # x = self.dropout1(x)
+        #
+        # x = F.relu(self.l2(x))
+        # x = self.dropout2(x)
+        #
+        # x = self.l3(x)
+        x_embedding = self.proj(x)
+        x_embedding = x_embedding.reshape(-1, self.n_col, self.output_dim)
+        x_embedding_with_pos = self.positional_embedding(x_embedding)
+        return x_embedding_with_pos
+
+
+class DiscriminatorEmbeddings(torch.nn.Module):
+    def __init__(self, input_dim, output_dim, dropout,
+                 n_col, metadata, device, max_windows_size=1000):
+        super(DiscriminatorEmbeddings, self).__init__()
+
+        self.n_col = n_col
+        self.metadata = metadata
+        self.output_dim = output_dim
+        self.embedding_layers = []
+        self.internal = []
+        interal_start = 0
+        nums_col = len(metadata['columns'])
+
+        self.proj = nn.Linear(input_dim, self.n_col * self.output_dim)
+
+        if n_col > 0:
+            col_size = [1 if item['type'] == NUMERICAL else item['size']
+                        for item in metadata['columns']]
+
+            discrete_size = [item['size'] for item in metadata['columns']
+                             if item['type'] != NUMERICAL]
+
+            col_output_dims = [1 if item['type'] == NUMERICAL else item['output_dimensions']
+                               for item in metadata['columns']]
+
+            discrete_output_dims = [item['output_dimensions'] for item in metadata['columns']
+                                    if item['type'] != NUMERICAL]
+
+            if n_col >= nums_col:
+                _size = col_size + discrete_size
+                _output_dims = col_output_dims + discrete_output_dims
+            else:
+                _size = discrete_size
+                _output_dims = discrete_output_dims
+
+            for col_idx in range(n_col):
+                if _size[col_idx] == 1:
+                    self.embedding_layers.append(nn.Linear(1, output_dim).to(device))
+                else:
+                    self.embedding_layers.append(nn.Embedding(_size[col_idx],
+                                                              output_dim).to(device))
+
+                self.internal.append((interal_start, interal_start + _output_dims[col_idx]))
+                interal_start = interal_start + _output_dims[col_idx]
+
+            self._size = _size
+
+        self.dropout = nn.Dropout(0.1)
+        self.linear = nn.Linear(output_dim, output_dim)
+
+        self.positional_embedding = PositionalEncoding(output_dim, dropout, max_windows_size)
+
+    def forward(self, x):
+
+        # embeddings = []
+        # for i, (s, e) in enumerate(self.internal):
+        #     if self._size[i] > 1:
+        #         em_output = self.embedding_layers[i](x[:, s:e].long())
+        #     else:
+        #         em_output = self.embedding_layers[i](x[:, s:e])
+        #         em_output = em_output.unsqueeze(1)
+        #     embeddings.append(em_output)
+        #
+        # outputs = torch.cat(embeddings, dim=1)
+        #
+        # x_embedding = self.linear(F.relu(outputs))
+        x_embedding = self.proj(x)
+        x_embedding = x_embedding.reshape(-1, self.n_col, self.output_dim)
+        x_embedding_with_pos = self.positional_embedding(x_embedding)
+        return x_embedding_with_pos
+
+
 class Encoder(nn.Module):
     """
     Core encoder is a stack of N layers
     """
+
     def __init__(self, layer, N, d_model):
         super(Encoder, self).__init__()
         self.d_model = d_model
@@ -290,32 +524,50 @@ class EncoderLayer(nn.Module):
 
 
 class TransformerEncoder(nn.Module):
-    def __init__(self, input_dim, output_dim, n_col, opt):
+    def __init__(self, input_dim, output_dim, n_col, opt, metadata, is_generator=False):
         super(TransformerEncoder, self).__init__()
         self.opt = opt
         self.n_col = n_col
+        self.metadata = metadata
+        self.is_generator = is_generator
+        self.device = torch.device(opt.device)
 
-        N = opt.layers_count  # N=6,
-        d_model = opt.d_model  # d_model=512,
-        d_ff = opt.d_ff  # d_ff=2048,
-        h = opt.head  # h=8,
-        dropout = opt.dropout  # dropout=0.1
-        attn = MultiHeadedAttention(h, d_model)
-        ff = PositionwiseFeedForward(d_model, d_ff, dropout)
+        if self.is_generator:
+            self.src_embed = GeneratorEmbeddings(input_dim,
+                                                 opt.d_model,
+                                                 opt.noise_dim,
+                                                 opt.dropout,
+                                                 self.n_col,
+                                                 self.metadata,
+                                                 self.device)
+            self.generator = GenGenerator(opt.d_model, n_col, output_dim,
+                                          self.metadata, self.device)
+        else:
+            self.src_embed = DiscriminatorEmbeddings(input_dim,
+                                                     opt.d_model,
+                                                     opt.dropout,
+                                                     self.n_col,
+                                                     self.metadata,
+                                                     self.device)
+            self.generator = DiscGenerator(opt.d_model, n_col, output_dim,
+                                           self.metadata, self.device)
 
-        self.encoder = Encoder(EncoderLayer(d_model, attn, ff, dropout), N, d_model)
-        self.src_embed = TransformerEmbeddings(d_model, input_dim, dropout, self.n_col)
-        self.generator = Generator(n_col, d_model, output_dim)
+        attn = MultiHeadedAttention(opt.head, opt.d_model)
+        ff = PositionwiseFeedForward(opt.d_model, opt.d_ff, opt.dropout)
+        self.encoder = Encoder(EncoderLayer(opt.d_model, attn, ff, opt.dropout),
+                               opt.layers_count,
+                               opt.d_model)
 
     def forward(self, src, src_mask=None):
         """
         :param src: a batch of input sentense with 2D dimension (batch_size, seq_len)
         :param src_mask:
-        :return: a batch of input sentense with encoding embedding, 3D dimentsion (batch_size, seq_len, d_model)
+        :return: a batch of input sentense with encoding embedding,
+                 3D dimentsion (batch_size, seq_len, d_model)
         """
 
         # after src_embed, return src_embed:(batch_size, d_model), torch.Size([500, 231])
         src_embed = self.src_embed(src)
         output = self.encoder(src_embed, src_mask)
-        return self.generator(output)
-
+        output = self.generator(output)
+        return output
