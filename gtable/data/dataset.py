@@ -14,6 +14,7 @@ class Dataset(abc.ABC):
         self.config = ctx.config
         self.logging = ctx.logger
         self._name = name
+        self.dataset_name = ""
 
         self.train_dataset = None  # Numpy format original dataset
         self.train_metadata = None

@@ -7,7 +7,7 @@ generation:
   data_type: "numpy"
 
   save_checkpoints_steps: 1000
-  epochs: 150
+  epochs: 50
   cuda_visible_devices: 2
   g_penalty: 1.0
   n_critic: 1
@@ -19,10 +19,10 @@ generation:
   categorial_embeddding: 'One_Hot'
   noise: "normal"
 
-  gtable_model: "gtable_standard"
+  gtable_model: "gtable_transformer"
   gen_layers: 2
   dis_layers: 2
-
+  condition_generator: False
 
   optim: adam
   learning_rate: 2e-4

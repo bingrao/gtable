@@ -258,7 +258,7 @@ class CTGANSynthesizer(BaseSynthesizer):
         """Fit the CTGAN Synthesizer models to the training data.
 
         Args:
-            data (numpy.ndarray or pandas.DataFrame):
+            dataset (numpy.ndarray or pandas.DataFrame):
                 Training Data. It must be a 2-dimensional numpy array or a
                 pandas.DataFrame.
             categorical_columns (list-like):
@@ -267,13 +267,12 @@ class CTGANSynthesizer(BaseSynthesizer):
                 contain the integer indices of the columns. Otherwise, if it is
                 a ``pandas.DataFrame``, this list should contain the column names.
             ordinal_columns:
-            epochs (int):
-                Number of training epochs. Defaults to 300.
-            log_frequency (boolean):
-                Whether to use log frequency of categorical levels in conditional
-                sampling. Defaults to ``True``.
         """
+        #  epochs (int): Number of training epochs. Defaults to 300.
         epochs = self.config.epochs
+        #  log_frequency (boolean):
+        #  Whether to use log frequency of categorical levels in conditional
+        #  sampling. Defaults to ``True``.
         log_frequency = True
 
         self.transformer = dataset.transformer
@@ -402,7 +401,6 @@ class CTGANSynthesizer(BaseSynthesizer):
 
     def sample(self, num_samples, **kwargs):
         """Sample data similar to the training data.
-
         Args:
             num_samples (int):
                 Number of rows to sample.

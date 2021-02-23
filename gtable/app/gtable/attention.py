@@ -44,7 +44,7 @@ class MultiHeadedAttention(nn.Module):
 
         # [query_linear, key_linear, value_linear, final_linear]
         self.linears = clones(nn.Linear(self.new_d_model, self.new_d_model), 4)
-        self.attn = None
+        self.attention = None
         self.dropout = nn.Dropout(p=dropout)
 
     def shape(self, x):
@@ -85,8 +85,8 @@ class MultiHeadedAttention(nn.Module):
 
         # 2) Apply attention on all the projected vectors in batch.
         # x: [batch_size, h, n_col, d_k], torch.Size([500, 2, 24, 16])
-        # self.attn: [batch_size, h, n_col, n_col], torch.Size([500, 2, 24, 24])
-        x, self.attn = attention(query, key, value, mask=mask, dropout=self.dropout)
+        # self.attention: [batch_size, h, n_col, n_col], torch.Size([500, 2, 24, 24])
+        x, self.attention = attention(query, key, value, mask=mask, dropout=self.dropout)
 
         # 3) "Concat" using a view and apply a final linear.
         # x: [batch_size, new_d_model], torch.Size([500, 768])

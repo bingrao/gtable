@@ -23,23 +23,43 @@ class GTABLESynthesizer(BaseSynthesizer):
     def __init__(self, ctx):
         super(GTABLESynthesizer, self).__init__(ctx)
         self.model_name = self.config.gtable_model
+        self.condition_generator = self.config.condition_generator
 
     def build_model(self, log_frequency=True):
 
+        self.logging.info("Build Data Sampler for training ...")
         self.data_sampler = RandomSampler(self.train_data, self.transformer.output_info)
 
-        self.cond_generator = ConditionalGenerator(self.train_data,
-                                                   self.transformer.output_info,
-                                                   log_frequency,
-                                                   self.config)
-        n_col = self.num_columns + self.cond_generator.n_col
-        self.generator = get_generator(self.model_name)(
-            self.noise_dim + self.cond_generator.n_opt,
-            self.data_dim, n_col, self.config).to(self.device)
+        if self.condition_generator:
+            self.logging.info("Build Conditional Generator ...")
+            self.cond_generator = ConditionalGenerator(self.train_data,
+                                                       self.transformer.output_info,
+                                                       log_frequency,
+                                                       self.config)
+            n_col = self.num_columns + self.cond_generator.n_col
+            self.generator = get_generator(self.model_name)(
+                self.noise_dim + self.cond_generator.n_opt,
+                self.data_dim, n_col, self.config,
+                self.transformer.metadata).to(self.device)
 
-        self.discriminator = get_discriminator(self.model_name)(
-            self.data_dim + self.cond_generator.n_opt,
-            1, n_col, self.config).to(self.device)
+            self.discriminator = get_discriminator(self.model_name)(
+                self.data_dim + self.cond_generator.n_opt,
+                1, n_col, self.config,
+                self.transformer.metadata).to(self.device)
+        else:
+            self.cond_generator = None
+            self.generator = get_generator(self.model_name)(
+                self.noise_dim, self.data_dim, self.num_columns,
+                self.config, self.transformer.metadata).to(self.device)
+
+            self.discriminator = get_discriminator(self.model_name)(
+                self.data_dim, 1, self.num_columns,
+                self.config, self.transformer.metadata).to(self.device)
+
+        self.logging.info(f"********************** Genertor ***************************:"
+                          f"\n{self.generator}")
+        self.logging.info(f"******************** Discriminator *************************:"
+                          f"\n{self.discriminator}")
 
         self.config.learning_rate_decay = 1e-6
         self.optimizerG = build_torch_optimizer(self.generator, self.config)
@@ -56,6 +76,37 @@ class GTABLESynthesizer(BaseSynthesizer):
         # 1. Reset gradients
         self.optimizerD.zero_grad()
 
+        fake = self.generator(fakez)
+
+        real = self.data_sampler.sample(self.batch_size)
+        real = torch.from_numpy(real.astype('float32')).to(self.device)
+
+        # 3. Sample noise and generate fake data
+        y_real = self.discriminator(real)
+        y_fake = self.discriminator(fake)
+
+        # 4. Calculate error
+        pen = self.config.g_penalty * self.discriminator.gradient_penalty(real,
+                                                                          fake,
+                                                                          self.device)
+        loss_d = self.discriminator.loss(y_real, y_fake)
+
+        # 5. loss backpropagate
+        pen.backward(retain_graph=True)
+        loss_d.backward()
+        self.optimizerD.step()
+
+        return loss_d + pen
+
+    def conditional_discriminator_train_step(self):
+        """
+            fakez.shape torch.Size([500, 128])
+        """
+        fakez = self.get_input_noise()
+
+        # 1. Reset gradients
+        self.optimizerD.zero_grad()
+
         # 2. Sample noise and generate fake data
         condvec = self.cond_generator.sample(self.batch_size)
         if condvec is None:
@@ -63,10 +114,10 @@ class GTABLESynthesizer(BaseSynthesizer):
             real = self.data_sampler.sample(self.batch_size, col, opt)
             c2 = c1
         else:
-            # c1.shape torch.Size([500, 103]),
-            # m1.shape (500, 9),
-            # col.shape (500,),
-            # opt.shape (500,)
+            # c1.shape torch.Size([500, 103]), The vector representation of selected columns
+            # m1.shape (500, 9), The mask of selected categorial column
+            # col.shape (500,), The index of selected categorial column
+            # opt.shape (500,), The index of selected category in a categorial column
             c1, m1, col, opt = condvec
             c1 = torch.from_numpy(c1).to(self.device)
             # m1 = torch.from_numpy(m1).to(self.device)
@@ -96,9 +147,9 @@ class GTABLESynthesizer(BaseSynthesizer):
         y_fake = self.discriminator(fake_cat)
 
         # 4. Calculate error
-        pen = self.config.g_penalty * self.discriminator.gradient_penalty(real_cat,
-                                                                          fake_cat,
-                                                                          self.device)
+        pen = self.discriminator.gradient_penalty(real_cat,
+                                                  fake_cat,
+                                                  self.device) * self.config.g_penalty
         loss_d = self.discriminator.loss(y_real, y_fake)
 
         # 5. loss backpropagate
@@ -117,11 +168,38 @@ class GTABLESynthesizer(BaseSynthesizer):
         # Reset gradients
         self.optimizerG.zero_grad()
 
+        # 2. generate fake data
+        fake = self.generator(fakez)
+
+        y_fake = self.discriminator(fake)
+
+        # 4. Calculate error
+        loss_g = self.generator.loss(y_fake)
+
+        # 5. loss backpropagate
+        loss_g.backward()
+        self.optimizerG.step()
+
+        return loss_g
+
+    def conditional_generator_train_step(self):
+        """
+            fakez.shape torch.Size([500, 128])
+        """
+        fakez = self.get_input_noise()
+
+        # Reset gradients
+        self.optimizerG.zero_grad()
+
         # 2. Sample noise and generate fake data
         condvec = self.cond_generator.sample(self.batch_size)
         if condvec is None:
             c1, m1, col, opt = None, None, None, None
         else:
+            # c1.shape torch.Size([500, 103]), The vector representation of selected columns
+            # m1.shape (500, 9), The mask of selected categorial column
+            # col.shape (500,), The index of selected categorial column
+            # opt.shape (500,), The index of selected category in a categorial column
             c1, m1, col, opt = condvec
             c1 = torch.from_numpy(c1).to(self.device)
             m1 = torch.from_numpy(m1).to(self.device)
@@ -172,10 +250,16 @@ class GTABLESynthesizer(BaseSynthesizer):
         for epoch in range(self.config.epochs):
             bar = pbar(self.num_samples, self.config.batch_size, epoch, self.config.epochs)
             for step in range(steps_per_epoch):
-                loss_g = self.generator_train_step()
+                if self.condition_generator:
+                    loss_g = self.conditional_generator_train_step()
+                else:
+                    loss_g = self.generator_train_step()
 
                 for _ in range(self.config.n_critic):
-                    loss_d = self.discriminator_train_step()
+                    if self.condition_generator:
+                        loss_d = self.conditional_discriminator_train_step()
+                    else:
+                        loss_d = self.discriminator_train_step()
 
                 bar.postfix['g_loss'] = f'{loss_g.detach().cpu():6.3f}'
                 bar.postfix['d_loss'] = f'{loss_d.detach().cpu():6.3f}'
@@ -188,6 +272,9 @@ class GTABLESynthesizer(BaseSynthesizer):
             self.save(self.config.save)
 
     def _cond_loss(self, data, c, m):
+        # data.shape torch.Size([500, 159]), The fake data generated by Generator
+        # c.shape torch.Size([500, 103]), The vector representation of selected columns
+        # m.shape (500, 9), The mask of selected categorial column
         loss = []
         st = 0
         st_c = 0
@@ -216,7 +303,7 @@ class GTABLESynthesizer(BaseSynthesizer):
 
             else:
                 assert 0
-
+        # torch.Size([500, 9])
         loss = torch.stack(loss, dim=1)
 
         return (loss * m).sum() / data.size()[0]
@@ -252,21 +339,22 @@ class GTABLESynthesizer(BaseSynthesizer):
             std = mean + 1
             fakez = torch.normal(mean=mean, std=std).to(self.device)
 
-            if global_condition_vec is not None:
-                condvec = global_condition_vec.copy()
-            else:
-                condvec = self.cond_generator.sample_zero(self.batch_size)
+            if self.condition_generator:
+                if global_condition_vec is not None:
+                    condvec = global_condition_vec.copy()
+                else:
+                    condvec = self.cond_generator.sample_zero(self.batch_size)
 
-            if condvec is None:
-                pass
-            else:
-                c1 = condvec
-                c1 = torch.from_numpy(c1).to(self.device)
-                fakez = torch.cat([fakez, c1], dim=1)
+                if condvec is None:
+                    pass
+                else:
+                    c1 = condvec
+                    c1 = torch.from_numpy(c1).to(self.device)
+                    fakez = torch.cat([fakez, c1], dim=1)
 
             fake = self.generator(fakez)
-            fakeact = self._apply_activate(fake)
-            data.append(fakeact.detach().cpu().numpy())
+            # fakeact = self._apply_activate(fake)
+            data.append(fake.detach().cpu().numpy())
 
         data = np.concatenate(data, axis=0)
         data = data[:num_samples]
@@ -301,7 +389,8 @@ class GTABLESynthesizer(BaseSynthesizer):
     def fit(self, dataset, categorical_columns=tuple(), ordinal_columns=tuple(), **kwargs):
         self.transformer = dataset.transformer
         self.num_columns = dataset.num_columns
-
+        self.logging.info(f"Fitting Data Transformer using "
+                          f"Training Dataset ({dataset.num_train_dataset}, {dataset.num_columns})")
         self.transformer.fit(dataset.train_dataset)
 
         # numpy array [nums_samples, dim] (32561, 157)
@@ -311,6 +400,8 @@ class GTABLESynthesizer(BaseSynthesizer):
 
         self.data_dim = self.transformer.output_dimensions
 
+        self.logging.info(f"Transforming Training Dataset into "
+                          f"numpy array: ({self.num_samples}, {self.data_dim})")
         self.build_model()
 
         self.train()

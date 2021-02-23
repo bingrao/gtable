@@ -1,11 +1,12 @@
 from torch.nn import Dropout, LeakyReLU, Linear, Module, Sequential, LayerNorm
 from gtable.app.gtable.attention import MultiHeadedAttention, PositionwiseFeedForward
 from gtable.utils.misc import ClassRegistry
+from gtable.app.gtable.transformer import TransformerEncoder
 import torch
 
 
 class Discriminator(Module):
-    def __init__(self, name, input_dim, output_dim, n_col, opt):
+    def __init__(self, name, input_dim, output_dim, n_col, opt, metadata=None):
         """
         (input_dim * pack) --> DiscriminatorLayer --> DiscriminatorLayer --> Linear--> (1)
         DiscriminatorLayer: Linear --> LeakyReLU --> Dropout
@@ -15,7 +16,7 @@ class Discriminator(Module):
         self.pack = opt.dis_pack
         self._input_dim = input_dim * self.pack
         self._output_dim = output_dim
-
+        self.metadata = metadata
         # nums of columns in orginal dataset and conditional dataset
         self.n_col = n_col
 
@@ -80,7 +81,7 @@ class StandardDiscriminatorLayer(Module):
 
 @register_disc(name="gtable_standard")
 class StandardDiscriminator(Discriminator):
-    def __init__(self, input_dim, output_dim, n_col, opt):
+    def __init__(self, input_dim, output_dim, n_col, opt, metadata=None):
         """
         (input_dim * pack) --> DiscriminatorLayer --> DiscriminatorLayer --> Linear--> (1)
         DiscriminatorLayer: Linear --> LeakyReLU --> Dropout
@@ -89,7 +90,8 @@ class StandardDiscriminator(Discriminator):
                                                     input_dim,
                                                     output_dim,
                                                     n_col,
-                                                    opt)
+                                                    opt,
+                                                    metadata)
 
     def build_model(self):
         dim = self._input_dim
@@ -137,7 +139,7 @@ class AttentionDiscriminatorLayer(Module):
 
 @register_disc(name="gtable_attention")
 class AttentionDiscriminator(Discriminator):
-    def __init__(self, input_dim, output_dim, n_col, opt):
+    def __init__(self, input_dim, output_dim, n_col, opt, metadata=None):
         """
         (input_dim * pack) --> DiscriminatorLayer --> DiscriminatorLayer --> Linear--> (1)
         DiscriminatorLayer: Linear --> LeakyReLU --> Dropout
@@ -149,7 +151,8 @@ class AttentionDiscriminator(Discriminator):
                                                      input_dim,
                                                      output_dim,
                                                      n_col,
-                                                     opt)
+                                                     opt,
+                                                     metadata)
 
     def build_model(self):
         dim = self._input_dim
@@ -165,6 +168,46 @@ class AttentionDiscriminator(Discriminator):
 
         seq += [Linear(dim, self._output_dim)]
         return Sequential(*seq)
+
+
+@register_disc(name="gtable_transformer")
+class TransformerDiscriminator(Discriminator):
+    def __init__(self, input_dim, output_dim, n_col, opt, metadata=None):
+        """
+        (input_dim * pack) --> DiscriminatorLayer --> DiscriminatorLayer --> Linear--> (1)
+        DiscriminatorLayer: Linear --> LeakyReLU --> Dropout
+        """
+
+        self.h = opt.head
+        self.dropout = opt.dropout
+        super(TransformerDiscriminator, self).__init__("gtable_transformer",
+                                                       input_dim,
+                                                       output_dim,
+                                                       n_col,
+                                                       opt,
+                                                       metadata)
+
+    def build_model(self):
+        return TransformerEncoder(input_dim=self._input_dim,
+                                  output_dim=self._output_dim,
+                                  n_col=self.n_col,
+                                  opt=self.config,
+                                  metadata=self.metadata,
+                                  is_generator=False)
+    # def build_model(self):
+    #     dim = self._input_dim
+    #     seq = []
+    #     n_col = self.n_col
+    #     for i in range(self.nums_layers):
+    #         seq += [AttentionDiscriminatorLayer(input_dim=dim,
+    #                                             output_dim=self.layer_dim,
+    #                                             head=self.h,
+    #                                             n_col=n_col,
+    #                                             dropout=self.dropout)]
+    #         dim = self.layer_dim
+    #
+    #     seq += [Linear(dim, self._output_dim)]
+    #     return Sequential(*seq)
 
 
 def get_discriminator(name):

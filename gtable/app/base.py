@@ -20,7 +20,8 @@ from torch.nn import functional
 
 
 class BaseSynthesizer:
-    """Base class for all default app.
+    """
+    Base class for all default app.
     """
     def __init__(self, ctx):
         self.context = ctx
@@ -53,9 +54,8 @@ class BaseSynthesizer:
 
     @classmethod
     def load(cls, path):
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         model = torch.load(path)
-        model.set_device(device)
+        model.set_device(cls.device)
         return model
 
     @classmethod

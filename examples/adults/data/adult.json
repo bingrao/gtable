@@ -3,6 +3,7 @@
         {
             "max": 90.0,
             "min": 17.0,
+            "mean": 0,
             "name": "age",
             "type": "numerical"
         },
@@ -24,6 +25,7 @@
         },
         {
             "max": 1484705.0,
+            "mean": 0,
             "min": 12285.0,
             "name": "fnlwgt",
             "type": "numerical"
@@ -54,6 +56,7 @@
         {
             "max": 16.0,
             "min": 1.0,
+            "mean": 0,
             "name": "education-num",
             "type": "numerical"
         },
@@ -129,18 +132,21 @@
         },
         {
             "max": 99999.0,
+            "mean": 0,
             "min": 0.0,
             "name": "capital-gain",
             "type": "numerical"
         },
         {
             "max": 4356.0,
+            "mean": 0,
             "min": 0.0,
             "name": "capital-loss",
             "type": "numerical"
         },
         {
             "max": 99.0,
+            "mean": 0,
             "min": 1.0,
             "name": "hours-per-week",
             "type": "numerical"

@@ -110,11 +110,12 @@ def dataset_opts(parser):
 
     group.add('--numerical_embeddding', '-numerical_embeddding', type=str,
               default='Bayesian_Gaussian_Norm',
-              choices=['Bayesian_Gaussian_Norm', 'Gaussian_Norm', 'MinMax_Norm'],
+              choices=['Bayesian_Gaussian_Norm', 'Gaussian_Norm',
+                       'MinMax_Norm', 'KBins_Discretizer', 'Power_Transformer'],
               help="The way to normalize the numerical dataset")
 
     group.add('--categorial_embeddding', '-categorial_embeddding', type=str,
-              choices=['One_Hot'], default='One_Hot',
+              choices=['Ordinal', 'MinMax_Norm', 'One_Hot'], default='One_Hot',
               help="The way to normalize the categorial discrete dataset")
 
     group.add('--ordinal_embeddding', '-ordinal_embeddding', type=str,
@@ -135,47 +136,55 @@ def dataset_opts(parser):
 
 
 def model_opts(parser):
-    group = parser.add_argument_group('Model')
+    model = parser.add_argument_group('Model')
 
-    group.add('--feature_size', '-feature_size', type=int, default=256,
+    model.add('--feature_size', '-feature_size', type=int, default=256,
               help="Size of last FC layer to calculate the Hinge Loss fucntion.")
 
-    group.add('--noise', '-noise', default='normal', choices=['normal', 'gmm'],
+    model.add('--noise', '-noise', default='normal', choices=['normal', 'gmm'],
               help="Generating noise input method.")
 
-    group.add("--noise_dim", "-noise_dim", type=int, default=128,
+    model.add("--noise_dim", "-noise_dim", type=int, default=128,
               help="The latent noise dimention")
+    ctgan = parser.add_argument_group('ctgan')
+    tablegan = parser.add_argument_group('tablegan')
 
-    group.add("--gen_layers", "-gen_layers", type=int, default=2,
-              help="The number of generator layers")
+    gtable = parser.add_argument_group('gtable')
+    gtable.add("--gen_layers", "-gen_layers", type=int, default=2,
+               help="The number of generator layers")
 
-    group.add("--gen_attention", "-gen_attention", default=False, action="store_true",
-              help="Enable generator's Self-attention ")
+    gtable.add("--gen_attention", "-gen_attention", default=False, action="store_true",
+               help="Enable generator's Self-attention ")
 
-    group.add("--gen_dim", "-gen_dim", type=int, default=256,
-              help="The dimention of a generator layer")
+    gtable.add("--gen_dim", "-gen_dim", type=int, default=256,
+               help="The dimention of a generator layer")
 
-    group.add("--dis_layers", "-dis_layers", type=int, default=2,
-              help="The number of discriminator layers")
+    gtable.add("--dis_layers", "-dis_layers", type=int, default=2,
+               help="The number of discriminator layers")
 
-    group.add("--dis_dim", "-dis_dim", type=int, default=256,
-              help="The dimention of a discriminator layer")
+    gtable.add("--dis_dim", "-dis_dim", type=int, default=256,
+               help="The dimention of a discriminator layer")
 
-    group.add("--dis_pack", "-dis_pack", type=int, default=10,
-              help="The number of packages in a discriminator layer")
+    gtable.add("--dis_pack", "-dis_pack", type=int, default=1,
+               help="The number of packages in a discriminator layer")
 
-    group.add("--dis_attention", "-dis_attention", default=False, action="store_true",
-              help="Enable discriminator's Self-attention")
+    gtable.add("--dis_attention", "-dis_attention", default=False, action="store_true",
+               help="Enable discriminator's Self-attention")
 
-    group.add("--gtable_model", "-gtable_model", type=str, default='gtable_stardard',
-              choices=['gtable_standard', 'gtable_attention'],
-              help="Enable discriminator's Self-attention")
+    gtable.add("--gtable_model", "-gtable_model", type=str, default='gtable_stardard',
+               choices=['gtable_standard', 'gtable_attention', 'gtable_transformer'],
+               help="Enable discriminator's Self-attention")
 
-    group.add("--head", "-head", type=int, default=2,
-              help="The number of head in multiple attention head")
+    gtable.add("--condition_generator", "-condition_generator", default=False, action="store_true",
+               help="Enable a conditional generator for data sample")
 
-    group.add('--dropout', '-dropout', type=float, default=0.1,
-              help="the ratio of Drop model")
+    gtable.add('--layers_count', type=int, default=6)
+    gtable.add('--d_model', type=int, default=128)
+    gtable.add("--head", "-head", type=int, default=8,
+               help="The number of head in multiple attention head")
+    gtable.add('--d_ff', type=int, default=1024)
+    gtable.add('--dropout', '-dropout', type=float, default=0.1,
+               help="the ratio of Drop model")
 
 
 def optimizer_opts(parser):
