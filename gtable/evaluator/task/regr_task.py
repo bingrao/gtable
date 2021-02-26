@@ -96,15 +96,13 @@ class RegrEvaluator(BasedEvaluator):
     def build_estimators(self):
         return make_evaluate_regr_tasks(self.context)
 
-    def run(self) -> float:
-
+    def run(self):
         self.build_datasets()
         self.fit_estimators()
 
         estimators_scores = self.score_estimators()
-        self.logging.info(f'Metrics score of Regressor tasks:\n {estimators_scores.to_string()}\n')
 
         # corr, p = self.scores(self.estimators_scores['real'], self.estimators_scores['fake'])
         # return corr
 
-        return 0.0
+        return estimators_scores, 0.0

@@ -25,7 +25,7 @@ from gtable.evaluator.task.regr_task import RegrEvaluator
 from gtable.utils.constants import NUMERICAL, CATEGORICAL, ORDINAL
 from typing import Union
 import pandas as pd
-
+from typing import List
 import numpy as np
 
 
@@ -53,10 +53,6 @@ class DataEvaluator:
         self.categorial_cols = [item['name'] for item in real_dataset.metadata['columns']
                                 if item['type'] == CATEGORICAL or item['type'] == ORDINAL]
 
-        # the metric to use for evaluation linear relations. Pearson's r by default,
-        # but supports all models in scipy.stats
-        # self.comparison_metric = get_score("pearsonr")
-
         self.random_seed = self.config.seed
 
         self.num_samples = min(len(self.real), len(self.fake))
@@ -83,38 +79,48 @@ class DataEvaluator:
             self.is_regr_evaluator = True
 
         self.visual = [] if self.config.visual is None else self.config.visual
-        # self.str2plotVisual = {"mean_std": self.plot_mean_std,
-        #                        "cumsums": self.plot_cumsums,
-        #                        "distributions": self.plot_distributions,
-        #                        "correlation": self.plot_correlation_difference,
-        #                        "pca": self.plot_pca}
 
         # statistical methods for numerical attributes
         self.numerical_statistics = [] if self.config.numerical_statistics is None \
             else self.config.numerical_statistics
 
-    def correlation_distance(self, how: str = 'euclidean') -> float:
+    def get_column_correlation_metrics(self, metrics=None) -> dict:
         """
         Calculate distance between correlation matrices with certain metric.
-
-        :param how: metric to measure distance.
-        Choose from [``euclidean``, ``mae``, ``rmse``, ``cosine``].
+        Calculate the correlation/strength-of-association of features in data-set with both categorical and continuous features using: * Pearson's R for continuous-continuous cases * Correlation Ratio for categorical-continuous cases * Cramer's V or Theil's U for categorical-categorical cases
+        :param metrics: metric to measure distance.
+        Choose from [``euclidean``, ``mae``, ``rmse``, ``cosine``, pearsonr].
         :return: distance between the association matrices in the
         chosen evaluation metric. Default: Euclidean
         """
+        if metrics is None:
+            metrics = ['euclidean']
 
-        assert how in ['euclidean', 'mae', 'rmse', 'cosine']
-
-        distance_func = get_score(how).score
+        return_metrics = {}
 
         real_corr = compute_associations(self.real,
                                          nominal_columns=self.categorial_cols,
-                                         theil_u=True)
+                                         theil_u=True).values
         fake_corr = compute_associations(self.fake,
                                          nominal_columns=self.categorial_cols,
-                                         theil_u=True)
+                                         theil_u=True).values
+        for how in metrics:
+            assert how in ['euclidean', 'mae', 'rmse', 'cosine', "pearsonr"]
 
-        return distance_func(real_corr.values, fake_corr.values)
+            distance_func = get_score(how).score
+
+            if how == "pearsonr":
+                real_corr = real_corr[~np.eye(real_corr.shape[0], dtype=bool)].reshape(
+                    real_corr.shape[0], -1).flatten()
+                fake_corr = fake_corr[~np.eye(fake_corr.shape[0], dtype=bool)].reshape(
+                    fake_corr.shape[0], -1).flatten()
+                score, _ = distance_func(real_corr, fake_corr)
+            else:
+                score = distance_func(real_corr, fake_corr)
+
+            return_metrics[f"{how.upper()}_Column_Correlation"] = score
+
+        return return_metrics
 
     def get_copies(self, return_len: bool = False) -> Union[pd.DataFrame, int]:
         """
@@ -138,22 +144,17 @@ class DataEvaluator:
         else:
             return copies
 
-    def get_duplicates(self, return_values: bool = False) -> Tuple[Union[pd.DataFrame, int],
-                                                                   Union[pd.DataFrame, int]]:
+    def get_duplicates(self) -> dict:
         """
         Return duplicates within each dataset.
-
-        :param return_values: whether to return the duplicate values in the datasets.
-        If false, the lengths are returned.
-        :return: dataframe with duplicates or the length
-        of those dataframes if return_values=False.
         """
         real_duplicates = self.real[self.real.duplicated(keep=False)]
         fake_duplicates = self.fake[self.fake.duplicated(keep=False)]
-        if return_values:
-            return real_duplicates, fake_duplicates
-        else:
-            return len(real_duplicates), len(fake_duplicates)
+
+        # return {'Duplicate rows between sets (real/fake)':
+        #             (len(real_duplicates), len(fake_duplicates))}
+        return {'Duplicate_Real': len(real_duplicates),
+                'Duplicate_Fake': len(fake_duplicates)}
 
     def pca_correlation(self, lingress=False):
         """
@@ -292,10 +293,13 @@ class DataEvaluator:
                 compute_categorial_statistics() * len(self.categorial_cols)) / \
                (len(self.numerical_cols) + len(self.categorial_cols))
 
-    def compute_distance(self, sample=3000):
+    def compute_distance(self, sample=None) -> dict:
         real = self.real.values
         fake = self.fake.values
         mask_d = np.zeros(len(self.metadata['columns']))
+
+        if sample is None:
+            sample = int(len(real) * 0.50)
 
         for id_, info in enumerate(self.metadata['columns']):
             if info['type'] in [CATEGORICAL, ORDINAL]:
@@ -316,29 +320,7 @@ class DataEvaluator:
             distance = np.sqrt(np.min(distance_c + distance_d))
             dis_all.append(distance)
 
-        return np.mean(dis_all)
-
-    def correlation_correlation(self) -> float:
-        """
-        Calculate the correlation coefficient between the association
-        matrices of self.real and self.fake using self.comparison_metric
-
-        :return: The correlation coefficient
-        """
-        total_metrics = pd.DataFrame()
-        for ds_name in ['real', 'fake']:
-            ds = getattr(self, ds_name)
-            corr_df = compute_associations(ds, nominal_columns=self.categorial_cols, theil_u=True)
-            values = corr_df.values
-            values = values[~np.eye(values.shape[0], dtype=bool)].reshape(values.shape[0], -1)
-            total_metrics[ds_name] = values.flatten()
-
-        # self.correlation_correlations = total_metrics
-        corr, p = get_score("pearsonr").score(total_metrics['real'], total_metrics['fake'])
-
-        self.logging.debug(f'\nColumn correlation between datasets:\n{total_metrics.to_string()}')
-
-        return corr
+        return {'Record_Distance': np.mean(dis_all)}
 
     def convert_numerical(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
@@ -360,7 +342,7 @@ class DataEvaluator:
         fake = fake[columns]
         return real, fake
 
-    def compute_row_nearest_neighbor(self, num_samples: int = None) -> Tuple[float, float]:
+    def compute_row_nearest_neighbor(self, num_samples: int = None) -> dict:
         """
         Calculate mean and standard deviation distances between `self.fake` and `self.real`.
 
@@ -392,7 +374,9 @@ class DataEvaluator:
         min_distances = np.min(distances, axis=1)
         min_mean = np.mean(min_distances)
         min_std = np.std(min_distances)
-        return min_mean, min_std
+
+        return {'Neighbor_Mean': min_mean,
+                'Neighbor_Std': min_std}
 
     def column_correlations(self):
         """
@@ -403,51 +387,66 @@ class DataEvaluator:
         column_correlations = get_score("column_correlations")
         return column_correlations(self.real, self.fake, self.categorial_cols)
 
-    def run(self):
+    def run(self, iteration=0, scores_metrics=None):
         """
         Determine correlation between attributes from the real
         and fake dataset using a given metric.
         All metrics from scipy.stats are available.
         """
 
+        if scores_metrics is None:
+            scores_metrics = {}
+
         for task in self.visual:
             self.logging.info(f"Plot {task} ...")
             get_plot(self.context, task)(self.real, self.fake,
-                                         self.numerical_cols, self.categorial_cols)
+                                         self.numerical_cols,
+                                         self.categorial_cols)
 
         # warnings.filterwarnings(action='ignore', category=ConvergenceWarning)
         # pd.options.display.float_format = '{:,.4f}'.format
 
         miscellaneous = dict()
-        miscellaneous['RMSE Column Correlation Distance'] = self.correlation_distance(how='rmse')
-        miscellaneous['MAE Column Correlation Distance'] = self.correlation_distance(how='mae')
-        miscellaneous['Record Distance'] = self.compute_distance()
-
-        nearest_neighbor = self.compute_row_nearest_neighbor()
-        miscellaneous['Mean Nearest Neighbor'] = nearest_neighbor[0]
-        miscellaneous['std Nearest Neighbor'] = nearest_neighbor[1]
-
-        miscellaneous['Duplicate rows between sets (real/fake)'] = self.get_duplicates()
-        miscellaneous_df = pd.DataFrame({'Result': list(miscellaneous.values())},
-                                        index=list(miscellaneous.keys()))
+        miscellaneous.update(self.get_column_correlation_metrics(['rmse', 'mae', 'pearsonr']))
+        miscellaneous.update(self.compute_distance())
+        miscellaneous.update(self.compute_row_nearest_neighbor())
+        miscellaneous.update(self.get_duplicates())
 
         all_results = {
-            'Spearman correlation of basic statistics': self.statistical_evaluation(),
-            'Pearsonr correlation of column correlations': self.correlation_correlation(),
-            'Mean of correlation between real/fake columns': self.column_correlations(),
-            'MAPE 5 PCA components': self.pca_correlation(),
+            'Spearman_Statistics': self.statistical_evaluation(),
+            'Column_Correlations': self.column_correlations(),
+            'MAPE_PCA': self.pca_correlation(),
         }
 
+        estimators_scores, eval_score = self.evaluator.run()
+        b = estimators_scores[['name', 'accuracy_real', 'f1_score_real']]
+        b.columns = scores_metrics.columns
+        scores_metrics = scores_metrics.append(b)
+
         if self.is_class_evaluator:
-            all_results.update({"MAPE on Scores of classification tasks": self.evaluator.run()})
+            self.logging.info(
+                f'Metrics score of Classifier tasks:\n{estimators_scores.to_string()}\n')
+            all_results.update({"MAPE_Class": eval_score})
 
         if self.is_regr_evaluator:
-            all_results.update({"Correlation on RMSE of regression tasks": self.evaluator.run()})
+            self.logging.info(
+                f'Metrics score of Regressor tasks:\n {estimators_scores.to_string()}\n')
+            all_results.update({"RMSE_Regr": eval_score})
 
-        all_results['Similarity Score [mean of all metrics]'] = np.mean(list(all_results.values()))
-        all_results_df = pd.DataFrame({'Result': list(all_results.values())},
-                                      index=list(all_results.keys()))
+        all_results['Similarity_Score'] = np.mean(list(all_results.values()))
 
+        for key, value in miscellaneous.items():
+            scores_metrics[key] = value
+
+        for key, value in all_results.items():
+            scores_metrics[key] = value
+
+        miscellaneous_df = pd.DataFrame({'Result': list(miscellaneous.values())},
+                                        index=list(miscellaneous.keys()))
         self.logging.info(f'Miscellaneous results:\n{miscellaneous_df.to_string()}\n')
 
+        all_results_df = pd.DataFrame({'Result': list(all_results.values())},
+                                      index=list(all_results.keys()))
         self.logging.info(f'Summary Results:\n{all_results_df.to_string()}\n')
+
+        return scores_metrics

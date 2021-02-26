@@ -6,6 +6,7 @@ from gtable.data.inputter import get_metadata, _get_columns, pickle_load, pickle
 import numpy as np
 import pandas as pd
 import abc
+from gtable.utils.evaluate import FeatureMaker
 
 
 class Dataset(abc.ABC):
@@ -49,20 +50,26 @@ class Dataset(abc.ABC):
     def save(self, data, metadata, outputPath):
         pickle_save(self.context, {"data": data, "metadata": metadata}, outputPath)
 
+    # def split_dataset(self, label=None):
+    #
+    #     _label = label if label is not None else self.metadata['label']
+    #
+    #     _train_dataset = pd.DataFrame(self.train_dataset, columns=self.name_columns)
+    #     _test_dataset = pd.DataFrame(self.test_dataset, columns=self.name_columns)
+    #
+    #     train_x = _train_dataset.drop([_label], axis=1).values
+    #     train_y = _train_dataset[_label]
+    #
+    #     test_x = _test_dataset.drop([_label], axis=1).values
+    #     test_y = _test_dataset[_label]
+    #
+    #     return train_x, train_y, test_x, test_y
+
     def split_dataset(self, label=None):
-
-        _label = label if label is not None else self.metadata['label']
-
-        _train_dataset = pd.DataFrame(self.train_dataset, columns=self.name_columns)
-        _test_dataset = pd.DataFrame(self.test_dataset, columns=self.name_columns)
-
-        train_x = _train_dataset.drop([_label], axis=1).values
-        train_y = _train_dataset[_label]
-
-        test_x = _test_dataset.drop([_label], axis=1).values
-        test_y = _test_dataset[_label]
-
-        return train_x, train_y, test_x, test_y
+        fm = FeatureMaker(self.metadata)
+        x_train, y_train = fm.make_features(self.train_dataset)
+        x_test, y_test = fm.make_features(self.test_dataset)
+        return x_train, y_train, x_test, y_test
 
     def preprocess(self):
         raise NotImplementedError

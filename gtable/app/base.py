@@ -17,6 +17,9 @@ import torch
 from gtable.data.dataset import get_data_loader
 from gtable.evaluator import DataEvaluator
 from torch.nn import functional
+from gtable.utils.evaluate import compute_scores
+import numpy as np
+import os
 
 
 class BaseSynthesizer:
@@ -62,9 +65,9 @@ class BaseSynthesizer:
     def from_contex(cls, ctx):
         return cls(ctx)
 
-    def evaluate(self, real_dataset, fake_dataset):
+    def evaluate(self, real_dataset, fake_dataset, iteration=0, scores=None):
         evaluator = DataEvaluator(self.context, real_dataset, fake_dataset)
-        evaluator.run()
+        return evaluator.run(iteration, scores)
 
     def _apply_activate(self, data):
         assert self.transformer is not None
@@ -84,20 +87,47 @@ class BaseSynthesizer:
 
         return torch.cat(data_t, dim=1)
 
-    def __call__(self, dataset):
-        self.logging.info("Fitting %s", self.__class__.__name__)
+    def __call__(self, dataset, iteration=0):
+        self.logging.info(f"Fitting and training {self.__class__.__name__}")
+
         self.fit(dataset)
 
-        self.logging.info("Sampling %s", self.__class__.__name__)
+        self.logging.info(f"Sampling {self.__class__.__name__}")
         fake_train = self.sample(dataset.num_train_dataset)
         fake_test = self.sample(dataset.num_test_dataset)
+
+        if self.config.output:
+            output_path = os.path.join(self.config.output,
+                                       f"fake_{self.context.real_name}-"
+                                       f"{self.context.app.lower()}-"
+                                       f"{self.context.config_file_name}-"
+                                       f"{iteration}.{self.context.real_ext}")
+            if self.context.real_ext == "npz":
+                np.savez(output_path,
+                         train=fake_train,
+                         test=fake_test,
+                         metadata=self.transformer.metadata)
+            elif self.context.real_ext == "csv":
+                pass
+            else:
+                pass
 
         fake_dataset = get_data_loader(self.context, "fake")((fake_train, fake_test),
                                                              dataset.metadata)
 
-        self.logging.info("Evaluation %s", self.__class__.__name__)
+        self.logging.info(f"Evaluation {self.__class__.__name__}")
 
-        # scores = compute_scores(dataset, fake_dataset)
-        # self.logging.info(f"Score: \n {scores}")
+        scores = compute_scores(dataset, fake_dataset)
 
-        self.evaluate(dataset, fake_dataset)
+        scores = self.evaluate(dataset, fake_dataset, iteration, scores)
+
+        scores['iteration'] = iteration
+        scores['synthesizer'] = self.context.app
+        scores['dataset'] = self.context.real_name
+
+        self.logging.info(f"Evaluation Score: "
+                          f"\n {scores[['iteration', 'synthesizer', 'dataset', 'name', 'accuracy', 'f1']]}")
+
+        self.logging.info(f"##################### [{iteration}] Over #####################")
+
+        return scores

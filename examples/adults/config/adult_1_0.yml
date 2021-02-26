@@ -7,11 +7,10 @@ generation:
   data_type: "numpy"
 
   save_checkpoints_steps: 1000
-  epochs: 150
-  cuda_visible_devices: 2
+  epochs: 300
+  cuda_visible_devices: 0
   g_penalty: 3.0
   n_critic: 5
-
 
   transformer_type: "gmm"
   numerical_embeddding: 'Gaussian_Norm'
@@ -19,10 +18,11 @@ generation:
   categorial_embeddding: 'One_Hot'
   noise: "normal"
 
+  condition_generator: true
   gtable_model: "gtable_transformer"
   gen_layers: 2
   dis_layers: 2
-
+  head: 8
 
   optim: adam
   learning_rate: 2e-4
@@ -35,8 +35,8 @@ generation:
                  'hours-per-week', 'native-country']
   target_col: 'income'
 
-  classify_tasks: ['xgboost', 'logistic_regression', 'random_forest', 'decision_tree', 'mlp']
-  classify_scores: [ 'F1_Score', 'Recall_Score', 'Precision_Score']
+  classify_tasks: ['decision_tree', 'adaboost', 'logistic_regression', 'mlp', 'xgboost', 'random_forest']
+  classify_scores: [ 'Accuracy', 'F1_Score', 'Recall_Score', 'Precision_Score']
 
   numerical_statistics: ['min', 'max', 'mean', 'median', 'std', 'var']
 

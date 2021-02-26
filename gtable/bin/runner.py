@@ -109,24 +109,24 @@ class Runner(object):
         data_loader = get_data_loader(self.context)
         return data_loader(path, metadata)
 
-    def evaluate(self):
+    def evaluate(self, iteration):
         """
         Data Preprocess and clean task
         :return: generator dataset for traning task
         """
-        self._evaluator.run()
+        return self._evaluator.run(iteration)
 
-    def generation(self):
+    def generation(self, iteration):
         """
         Using trained model to generate anonmymous data
         :return:
         """
-        self.model(self.real_dataset)
+        return self.model(self.real_dataset, iteration)
 
-    def run(self):
+    def run(self, iteration=0):
         if self.run_type == "generation":
-            self.generation()
+            return self.generation(iteration)
         elif self.run_type == "evaluate":
-            self.evaluate()
+            return self.evaluate(iteration)
         else:
             self.logging.info(f"Run type is wrong {self.run_type}")

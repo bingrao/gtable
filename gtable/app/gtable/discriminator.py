@@ -1,7 +1,6 @@
 from torch.nn import Dropout, LeakyReLU, Linear, Module, Sequential, LayerNorm
-from gtable.app.gtable.attention import MultiHeadedAttention, PositionwiseFeedForward
 from gtable.utils.misc import ClassRegistry
-from gtable.app.gtable.transformer import TransformerEncoder
+from gtable.app.gtable.transformer import TransformerEncoder, SelfAttention, FeedForward
 import torch
 
 
@@ -110,8 +109,8 @@ class AttentionDiscriminatorLayer(Module):
         super(AttentionDiscriminatorLayer, self).__init__()
         self.layer_norm_1 = LayerNorm(input_dim, eps=1e-6)
         self.layer_norm_2 = LayerNorm(input_dim, eps=1e-6)
-        self.attention = MultiHeadedAttention(n_col, head, input_dim)
-        self.feed_forward = PositionwiseFeedForward(input_dim, 512, output_dim, dropout, False)
+        self.attention = SelfAttention(input_dim, 128, n_col, head)
+        self.feed_forward = FeedForward(input_dim, 512, output_dim, dropout, False)
 
         self.fc = Linear(input_dim, output_dim)
 

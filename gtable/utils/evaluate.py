@@ -14,20 +14,20 @@ from sklearn.tree import DecisionTreeClassifier
 
 from gtable.utils.constants import CATEGORICAL, NUMERICAL, ORDINAL
 
-LOGGER = logging.getLogger(__name__)
-
-
 _MODELS = {
     'binary_classification': [
         {
             'class': DecisionTreeClassifier,
             'kwargs': {
-                'max_depth': 15,
+                'max_depth': 20,
                 'class_weight': 'balanced',
             }
         },
         {
             'class': AdaBoostClassifier,
+            'kwargs': {
+                'n_estimators': 50
+            }
         },
         {
             'class': LogisticRegression,
@@ -145,7 +145,7 @@ def _prepare_ml_problem(train, test, metadata):
     return x_train, y_train, x_test, y_test, _MODELS[metadata['problem_type']]
 
 
-def _evaluate_multi_classification(train, test, metadata):
+def _evaluate_multi_classification(train, test, metadata, logger=None):
     """Score classifiers using f1 score and the given train and test data.
 
     Args:
@@ -158,6 +158,9 @@ def _evaluate_multi_classification(train, test, metadata):
     Returns:
         pandas.DataFrame
     """
+    if logger is None:
+        logger = logging.getLogger(__name__)
+
     x_train, y_train, x_test, y_test, classifiers = _prepare_ml_problem(train, test, metadata)
 
     performance = []
@@ -167,7 +170,7 @@ def _evaluate_multi_classification(train, test, metadata):
         model_repr = model_class.__name__
         model = model_class(**model_kwargs)
 
-        LOGGER.info('Evaluating using multiclass classifier %s', model_repr)
+        logger.info('Evaluating using multiclass classifier %s', model_repr)
         unique_labels = np.unique(y_train)
         if len(unique_labels) == 1:
             pred = [unique_labels[0]] * len(x_test)
@@ -191,7 +194,11 @@ def _evaluate_multi_classification(train, test, metadata):
     return pd.DataFrame(performance)
 
 
-def _evaluate_binary_classification(train, test, metadata):
+def _evaluate_binary_classification(train, test, metadata, logger=None):
+
+    if logger is None:
+        logger = logging.getLogger(__name__)
+
     x_train, y_train, x_test, y_test, classifiers = _prepare_ml_problem(train, test, metadata)
 
     performance = []
@@ -201,7 +208,7 @@ def _evaluate_binary_classification(train, test, metadata):
         model_repr = model_class.__name__
         model = model_class(**model_kwargs)
 
-        LOGGER.info('Evaluating using binary classifier %s', model_repr)
+        logger.info('Evaluating using binary classifier %s', model_repr)
         unique_labels = np.unique(y_train)
         if len(unique_labels) == 1:
             pred = [unique_labels[0]] * len(x_test)
@@ -223,7 +230,11 @@ def _evaluate_binary_classification(train, test, metadata):
     return pd.DataFrame(performance)
 
 
-def _evaluate_regression(train, test, metadata):
+def _evaluate_regression(train, test, metadata, logger=None):
+
+    if logger is None:
+        logger = logging.getLogger(__name__)
+
     x_train, y_train, x_test, y_test, regressors = _prepare_ml_problem(train, test, metadata)
 
     performance = []
@@ -235,7 +246,7 @@ def _evaluate_regression(train, test, metadata):
         model_repr = model_class.__name__
         model = model_class(**model_kwargs)
 
-        LOGGER.info('Evaluating using regressor %s', model_repr)
+        logger.info('Evaluating using regressor %s', model_repr)
         model.fit(x_train, y_train)
         pred = model.predict(x_test)
 
@@ -251,11 +262,14 @@ def _evaluate_regression(train, test, metadata):
     return pd.DataFrame(performance)
 
 
-def _evaluate_gmm_likelihood(train, test, metadata, components=[10, 30]):
+def _evaluate_gmm_likelihood(train, test, metadata, components=[10, 30], logger=None):
     results = list()
+    if logger is None:
+        logger = logging.getLogger(__name__)
+
     for n_components in components:
         gmm = GaussianMixture(n_components, covariance_type='diag')
-        LOGGER.info('Evaluating using %s', gmm)
+        logger.info('Evaluating using %s', gmm)
         gmm.fit(test)
         l1 = gmm.score(train)
 
@@ -283,8 +297,11 @@ def _mapper(data, metadata):
     return data_t
 
 
-def _evaluate_bayesian_likelihood(train, test, metadata):
-    LOGGER.info('Evaluating using Bayesian Likelihood.')
+def _evaluate_bayesian_likelihood(train, test, metadata, logger=None):
+    if logger is None:
+        logger = logging.getLogger(__name__)
+
+    logger.info('Evaluating using Bayesian Likelihood.')
 
     train_mapped = _mapper(train, metadata)
     test_mapped = _mapper(test, metadata)
@@ -351,14 +368,14 @@ def compute_scores(real, fake):
 
     real_train = real.train_dataset
     real_test = real.test_dataset
+
     metadata = real.metadata
+    logger = real.logging
 
     fake_train = fake.train_dataset
     fake_test = fake.test_dataset
 
     evaluator = _EVALUATORS[metadata['problem_type']]
 
-    scores = evaluator(fake_train, real_test, metadata)
-    scores['distance'] = _compute_distance(real_train, fake_train, metadata)
-
+    scores = evaluator(fake_train, real_test, metadata, logger)
     return scores

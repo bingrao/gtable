@@ -315,7 +315,7 @@ def get_terminal_width():
 
 
 def pbar(total_records, batch_size, epoch, epochs):
-    bar = tqdm(total=math.ceil(total_records / batch_size) * batch_size,
+    bar = tqdm(total=math.floor(total_records / batch_size) * batch_size,
                ncols=int(get_terminal_width() * .9),
                # desc=tqdm.write(f'Epoch {epoch + 1}/{epochs}'),
                postfix={

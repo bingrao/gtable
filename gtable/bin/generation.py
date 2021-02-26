@@ -19,7 +19,8 @@ import gtable.utils.opts as opts
 from gtable.utils import ArgumentParser
 from gtable.bin import Runner
 from gtable.utils import Context
-
+from gtable.utils.results import make_leaderboard
+import os
 
 def _get_parser():
     parser = ArgumentParser(run_type="generation", description='generation.py')
@@ -38,7 +39,18 @@ def main():
     parser = _get_parser()
     opt = parser.parse_args()
     ctx = Context(opt)
-    Runner(ctx).run()
+
+    scores = []
+    for i in range(opt.iterations):
+        scores.append(Runner(ctx).run(i))
+
+    lb = make_leaderboard(scores, output_path=os.path.join(ctx.output,
+                                                           f"{ctx.real_name}-"
+                                                           f"{ctx.app}-"
+                                                           f"{ctx.config_file_name}-"
+                                                           f"leaderboard.csv"))
+    if lb is not None:
+        print(lb)
 
 
 if __name__ == "__main__":

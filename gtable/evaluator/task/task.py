@@ -78,6 +78,8 @@ class BasedEvaluator:
         self.real = real
         self.fake = fake
 
+        self.metadata = real.metadata
+
         # self.target_col = self.real.metadata['label']
         self.features_col = self.config.features_col
 
@@ -144,10 +146,10 @@ class BasedEvaluator:
 
     def build_datasets_from_dataset(self, real, fake):
         self.real_x_train, self.real_y_train, \
-            self.real_x_test, self.real_y_test = real.split_dataset()
+        self.real_x_test, self.real_y_test = real.split_dataset()
 
         self.fake_x_train, self.fake_y_train, \
-            self.fake_x_test, self.fake_y_test = fake.split_dataset()
+        self.fake_x_test, self.fake_y_test = fake.split_dataset()
 
     def build_datasets(self):
         # For reproducibilty:
@@ -170,6 +172,66 @@ class BasedEvaluator:
             self.logging.info(f'Fitting fake: {i + 1}: {type(c).__name__}')
             c.fit(self.fake_x_train, self.fake_y_train)
 
+    # def score_estimators(self):
+    #     """
+    #     Get F1 scores of self.real_estimators and self.fake_estimators
+    #     on the fake and real data, respectively.
+    #
+    #     :return: dataframe with the results for each estimator on each data test set.
+    #     """
+    #     rows = []
+    #     for real_estimator, fake_estimator, estimator_name in \
+    #             zip(self.real_estimators, self.fake_estimators, self.estimator_names):
+    #         for dataset, target, dataset_name in zip([self.real_x_test, self.fake_x_test],
+    #                                                  [self.real_y_test, self.fake_y_test],
+    #                                                  ['real', 'fake']):
+    #             predict_real = real_estimator.predict(dataset)
+    #             predict_fake = fake_estimator.predict(dataset)
+    #             row = {'name': f'{estimator_name}_{dataset_name}'}
+    #             for score in self.scores:
+    #                 row.update(score(target, predict_real, "real"))
+    #                 row.update(score(target, predict_fake, "fake"))
+    #
+    #             if self.validType == "classifer":
+    #                 jac_sim = get_score("jaccard_similarity").score(predict_real, predict_fake)
+    #                 row.update({'jaccard_similarity': jac_sim})
+    #
+    #             rows.append(row)
+    #     output = pd.DataFrame(rows)
+    #     return output
+
+    # def score_estimators(self):
+    #     """
+    #     Get F1 scores of self.real_estimators and self.fake_estimators
+    #     on the fake and real data, respectively.
+    #
+    #     :return: dataframe with the results for each estimator on each data test set.
+    #     """
+    #     rows = []
+    #     for real_estimator, estimator_name in zip(self.real_estimators, self.estimator_names):
+    #         row = {'name': f'{estimator_name}_real'}
+    #         for dataset, target, dataset_name in zip([self.real_x_test, self.fake_x_test],
+    #                                                  [self.real_y_test, self.fake_y_test],
+    #                                                  ['real', 'fake']):
+    #             predict_real = real_estimator.predict(dataset)
+    #             for score in self.scores:
+    #                 row.update(score(target, predict_real, dataset_name))
+    #         rows.append(row)
+    #
+    #     for fake_estimator, estimator_name in zip(self.fake_estimators, self.estimator_names):
+    #         row = {'name': f'{estimator_name}_fake'}
+    #         for dataset, target, dataset_name in zip([self.real_x_test, self.fake_x_test],
+    #                                                  [self.real_y_test, self.fake_y_test],
+    #                                                  ['real', 'fake']):
+    #             predict_fake = fake_estimator.predict(dataset)
+    #             for score in self.scores:
+    #                 row.update(score(target, predict_fake, dataset_name))
+    #
+    #         rows.append(row)
+    #
+    #     output = pd.DataFrame(rows)
+    #     return output
+
     def score_estimators(self):
         """
         Get F1 scores of self.real_estimators and self.fake_estimators
@@ -178,33 +240,56 @@ class BasedEvaluator:
         :return: dataframe with the results for each estimator on each data test set.
         """
         rows = []
+        predict_real = {}
+        predict_fake = {}
         for real_estimator, fake_estimator, estimator_name in \
-                zip(self.real_estimators, self.fake_estimators, self.estimator_names):
+            zip(self.real_estimators, self.fake_estimators, self.estimator_names):
+            # Using model trained by real dataset to predict real and fake test datasets
+            row = {'name': f'{estimator_name}_real'}
+            predict_real[estimator_name] = []
+            predict_fake[estimator_name] = []
             for dataset, target, dataset_name in zip([self.real_x_test, self.fake_x_test],
                                                      [self.real_y_test, self.fake_y_test],
                                                      ['real', 'fake']):
-                # for dataset, target, dataset_name in zip([self.real_x, self.fake_x],
-                #                                          [self.real_y, self.fake_y],
-                #                                          ['real', 'fake']):
-                predict_real = real_estimator.predict(dataset)
-                predict_fake = fake_estimator.predict(dataset)
-                row = {'index': f'{estimator_name}_{dataset_name}'}
+                predict = real_estimator.predict(dataset)
+                predict_real[estimator_name].append(predict)
                 for score in self.scores:
-                    row.update(score(target, predict_real, "real"))
-                    row.update(score(target, predict_fake, "fake"))
+                    row.update(score(target, predict, dataset_name))
 
-                if self.validType == "classifer":
-                    jac_sim = get_score("jaccard_similarity").score(predict_real, predict_fake)
-                    row.update({'jaccard_similarity': jac_sim})
+            rows.append(row)
 
+            # Using model trained by fake dataset to predict real and fake test datasets
+            row = {'name': f'{estimator_name}_fake'}
+            for dataset, target, dataset_name in zip([self.real_x_test, self.fake_x_test],
+                                                     [self.real_y_test, self.fake_y_test],
+                                                     ['real', 'fake']):
+                predict = fake_estimator.predict(dataset)
+                predict_fake[estimator_name].append(predict)
+                for score in self.scores:
+                    row.update(score(target, predict, dataset_name))
+
+            rows.append(row)
+        output = pd.DataFrame(rows)
+        if self.validType == "classifer":
+            rows = []
+            for estimator_name in self.estimator_names:
+                row = {'name': f'{estimator_name}'}
+                for real, fake, name in zip(predict_real[estimator_name],
+                                            predict_fake[estimator_name],
+                                            ['real', 'fake']):
+                    jac_sim = get_score("jaccard_similarity").score(real, fake)
+                    row.update({name: jac_sim})
                 rows.append(row)
+            jaccard = pd.DataFrame(rows)
+            self.logging.info(f"Jaccard Similarity of outputs predicted by models"
+                              f"for real and fake testing datasets: \n {jaccard}\n")
 
-        return pd.DataFrame(rows).set_index('index')
+        return output
 
     @abc.abstractmethod
     def build_estimators(self):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def run(self) -> float:
+    def run(self):
         raise NotImplementedError

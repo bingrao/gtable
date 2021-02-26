@@ -1,7 +1,5 @@
 from torch.nn import BatchNorm1d, Linear, Module, ReLU, Sequential, LayerNorm
-from gtable.app.gtable.attention import MultiHeadedAttention
-from gtable.app.gtable.attention import PositionwiseFeedForward
-from gtable.app.gtable.transformer import TransformerEncoder
+from gtable.app.gtable.transformer import TransformerEncoder, SelfAttention, FeedForward
 from gtable.utils.misc import ClassRegistry
 from torch.nn import functional
 import numpy as np
@@ -261,8 +259,8 @@ class AttentionGeneratorLayer(Module):
     def __init__(self, input_dim, output_dim, head, n_col, dropout=0.1):
         super(AttentionGeneratorLayer, self).__init__()
         self.layer_norm = LayerNorm(input_dim, eps=1e-6)
-        self.attention = MultiHeadedAttention(n_col, head, input_dim)
-        self.feed_forward = PositionwiseFeedForward(input_dim, 512, output_dim, dropout)
+        self.attention = SelfAttention(input_dim, 128, n_col, head)
+        self.feed_forward = FeedForward(input_dim, 512, output_dim, dropout)
 
     def forward(self, x):
         out = self.layer_norm(x)

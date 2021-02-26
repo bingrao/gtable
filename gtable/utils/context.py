@@ -59,6 +59,9 @@ class Context:
         self.project_dir = self.config.project_dir if self.config.project_dir != "" \
             else str(BASE_DIR)
 
+        self.output = self.config.output
+        create_dir(self.output)
+
         self.run_type = self.config.run_type
         self.app = self.config.app
         self.config_file_name = Path(self.config.config).stem if \
@@ -68,8 +71,10 @@ class Context:
             self.project_log = self.config.log_file
         else:
             self.project_log = join(self.project_dir,
+                                    self.output,
                                     'logs',
                                     f'{self.run_type}-{date.today()}-'
+                                    f'{self.app}-'
                                     f'{self.config_file_name}-log.txt')
 
         if not exists(self.project_log):
@@ -98,11 +103,11 @@ class Context:
         """
 
         self.real_data = self.config.real_data
+
+        self.real_name, self.real_ext = os.path.basename(self.real_data).split(".")
         self.fake_data = self.config.fake_data
         self.metadata = self.config.metadata
         self.data_type = self.config.data_type
-        self.output = self.config.output
-        create_dir(self.output)
 
         self.num_samples = self.config.num_samples
         # self.target_col = self.config.target_col

@@ -118,7 +118,7 @@ class SublayerConnection(nn.Module):
 class Generator(nn.Module):
     """Define standard linear + softmax generation step."""
 
-    def __init__(self, n_col, d_model, output_channel, activate=None):
+    def __init__(self, n_col, d_model, output_channel):
         super(Generator, self).__init__()
         # y = A*x + B,
         # where x.Size = d_model is input dimension,
@@ -287,31 +287,30 @@ class PositionalEncoding(torch.nn.Module):
 
 # Source and target input embedding
 class Embeddings(torch.nn.Module):
-    def __init__(self, d_model, num_channel):
+    def __init__(self, input_dim, output_dim, n_col):
         super(Embeddings, self).__init__()
-        self.num_channel = num_channel
-        self.d_model = d_model
-        self.linear = nn.Linear(num_channel, d_model)
+        self.cov1D = nn.ConvTranspose1d(input_dim, n_col, output_dim)
+        self.batchNorm = nn.BatchNorm1d(n_col)
 
     def forward(self, x):
         """
         :param x: The input 3D dimension (batch_size, windows_size, nums_channel)
         :return: The output with 3D (batch_size, windows_size, d_model)
         """
-        return self.linear(x)
+        x = self.cov1D(x.unsqueeze(dim=-1))
+
+        return self.batchNorm(x)
 
 
 class TransformerEmbeddings(torch.nn.Module):
-    def __init__(self, d_model, num_channel, dropout, n_col, max_windows_size=1000):
+    def __init__(self, input_dim, output_dim, n_col, dropout, max_windows_size=1000):
         super(TransformerEmbeddings, self).__init__()
-        self.d_model = d_model
         self.n_col = n_col
-        self.embedding = Embeddings(self.n_col*d_model, num_channel)
-        self.positional_embedding = PositionalEncoding(d_model, dropout, max_windows_size)
+        self.embedding = Embeddings(input_dim, output_dim, n_col)
+        self.positional_embedding = PositionalEncoding(output_dim, dropout, max_windows_size)
 
     def forward(self, x):
         x_embedding = self.embedding(x)
-        x_embedding = x_embedding.reshape((-1, self.n_col, self.d_model))
         x_embedding_with_pos = self.positional_embedding(x_embedding)
         return x_embedding_with_pos
 
@@ -326,6 +325,8 @@ class GeneratorEmbeddings(torch.nn.Module):
         self.n_col = n_col
         self.metadata = metadata
         self.proj = nn.Linear(input_dim, self.n_col * output_dim)
+
+        self.cov1D = nn.ConvTranspose1d(input_dim, self.n_col, output_dim)
 
         self.embedding_layers = []
         self.internal = []
@@ -379,26 +380,35 @@ class GeneratorEmbeddings(torch.nn.Module):
 
         self.positional_embedding = PositionalEncoding(output_dim, dropout, max_windows_size)
 
-    def forward(self, x):
+    # def forward(self, x):
+    #
+    #     embeddings = []
+    #     for i, (s, e) in enumerate(self.internal):
+    #         em_output = self.embedding_layers[i](x[:, s:e])
+    #         if i == 0:
+    #             em_output = em_output.reshape((em_output.shape[0], -1, self.output_dim))
+    #         embeddings.append(em_output)
+    #
+    #     x = F.relu(torch.cat(embeddings, dim=1))
+    #
+    #     x = F.relu(self.l1(x))
+    #     x = self.dropout1(x)
+    #
+    #     x = F.relu(self.l2(x))
+    #     x = self.dropout2(x)
+    #
+    #     x_embedding = self.l3(x)
+    #     x_embedding_with_pos = self.positional_embedding(x_embedding)
+    #     return x_embedding_with_pos
 
-        # embeddings = []
-        # for i, (s, e) in enumerate(self.internal):
-        #     em_output = self.embedding_layers[i](x[:, s:e])
-        #     if i == 0:
-        #         em_output = em_output.reshape((em_output.shape[0], -1, self.output_dim))
-        #     embeddings.append(em_output)
-        #
-        # x = F.relu(torch.cat(embeddings, dim=1))
-        #
-        # x = F.relu(self.l1(x))
-        # x = self.dropout1(x)
-        #
-        # x = F.relu(self.l2(x))
-        # x = self.dropout2(x)
-        #
-        # x = self.l3(x)
-        x_embedding = self.proj(x)
-        x_embedding = x_embedding.reshape(-1, self.n_col, self.output_dim)
+    # def forward(self, x):
+    #     x_embedding = self.proj(x)
+    #     x_embedding = x_embedding.reshape(-1, self.n_col, self.output_dim)
+    #     x_embedding_with_pos = self.positional_embedding(x_embedding)
+    #     return x_embedding_with_pos
+
+    def forward(self, x):
+        x_embedding = self.cov1D(x.unsqueeze(-1))
         x_embedding_with_pos = self.positional_embedding(x_embedding)
         return x_embedding_with_pos
 
@@ -417,6 +427,8 @@ class DiscriminatorEmbeddings(torch.nn.Module):
         nums_col = len(metadata['columns'])
 
         self.proj = nn.Linear(input_dim, self.n_col * self.output_dim)
+        self.cov1D = nn.ConvTranspose1d(input_dim, self.n_col, output_dim)
+        self.batchNorm = nn.BatchNorm2d(self.n_col)
 
         if n_col > 0:
             col_size = [1 if item['type'] == NUMERICAL else item['size']
@@ -455,22 +467,33 @@ class DiscriminatorEmbeddings(torch.nn.Module):
 
         self.positional_embedding = PositionalEncoding(output_dim, dropout, max_windows_size)
 
-    def forward(self, x):
+    # def forward(self, x):
+    #
+    #     embeddings = []
+    #     for i, (s, e) in enumerate(self.internal):
+    #         if self._size[i] > 1:
+    #             em_output = self.embedding_layers[i](x[:, s:e].long())
+    #         else:
+    #             em_output = self.embedding_layers[i](x[:, s:e])
+    #             em_output = em_output.unsqueeze(1)
+    #         embeddings.append(em_output)
+    #
+    #     outputs = torch.cat(embeddings, dim=1)
+    #
+    #     x_embedding = self.linear(F.relu(outputs))
+    #
+    #     x_embedding = x_embedding.reshape(-1, self.n_col, self.output_dim)
+    #     x_embedding_with_pos = self.positional_embedding(x_embedding)
+    #     return x_embedding_with_pos
 
-        # embeddings = []
-        # for i, (s, e) in enumerate(self.internal):
-        #     if self._size[i] > 1:
-        #         em_output = self.embedding_layers[i](x[:, s:e].long())
-        #     else:
-        #         em_output = self.embedding_layers[i](x[:, s:e])
-        #         em_output = em_output.unsqueeze(1)
-        #     embeddings.append(em_output)
-        #
-        # outputs = torch.cat(embeddings, dim=1)
-        #
-        # x_embedding = self.linear(F.relu(outputs))
-        x_embedding = self.proj(x)
-        x_embedding = x_embedding.reshape(-1, self.n_col, self.output_dim)
+    # def forward(self, x):
+    #     x_embedding = self.proj(x)
+    #     x_embedding = x_embedding.reshape(-1, self.n_col, self.output_dim)
+    #     x_embedding_with_pos = self.positional_embedding(x_embedding)
+    #     return x_embedding_with_pos
+
+    def forward(self, x):
+        x_embedding = self.cov1D(x.unsqueeze(dim=-1))
         x_embedding_with_pos = self.positional_embedding(x_embedding)
         return x_embedding_with_pos
 
@@ -532,31 +555,20 @@ class TransformerEncoder(nn.Module):
         self.is_generator = is_generator
         self.device = torch.device(opt.device)
 
-        if self.is_generator:
-            self.src_embed = GeneratorEmbeddings(input_dim,
-                                                 opt.d_model,
-                                                 opt.noise_dim,
-                                                 opt.dropout,
-                                                 self.n_col,
-                                                 self.metadata,
-                                                 self.device)
-            self.generator = GenGenerator(opt.d_model, n_col, output_dim,
-                                          self.metadata, self.device)
-        else:
-            self.src_embed = DiscriminatorEmbeddings(input_dim,
-                                                     opt.d_model,
-                                                     opt.dropout,
-                                                     self.n_col,
-                                                     self.metadata,
-                                                     self.device)
-            self.generator = DiscGenerator(opt.d_model, n_col, output_dim,
-                                           self.metadata, self.device)
+        self.src_embed = TransformerEmbeddings(input_dim, opt.d_model, self.n_col, opt.dropout)
 
         attn = MultiHeadedAttention(opt.head, opt.d_model)
         ff = PositionwiseFeedForward(opt.d_model, opt.d_ff, opt.dropout)
         self.encoder = Encoder(EncoderLayer(opt.d_model, attn, ff, opt.dropout),
                                opt.layers_count,
                                opt.d_model)
+
+        if self.is_generator:
+            self.generator = GenGenerator(opt.d_model, n_col, output_dim,
+                                          self.metadata, self.device)
+        else:
+            self.generator = DiscGenerator(opt.d_model, n_col, output_dim,
+                                           self.metadata, self.device)
 
     def forward(self, src, src_mask=None):
         """
@@ -571,3 +583,116 @@ class TransformerEncoder(nn.Module):
         output = self.encoder(src_embed, src_mask)
         output = self.generator(output)
         return output
+
+
+"""
+Attention Layer
+"""
+
+
+class SelfAttention(nn.Module):
+    def __init__(self, input_dim, d_model, n_col, h, dropout=0.1):
+        """Take in model size and number of heads."""
+        super(SelfAttention, self).__init__()
+        # assert d_model % h == 0
+        # We assume d_v always equals d_k
+        self.n_col = n_col  # nums columns of input
+        self.h = h  # nums of head
+        self.d_model = d_model  # dimension size of input and output model
+        self.d_k = d_model // h
+        self.conv1D = clones(nn.ConvTranspose1d(input_dim, n_col, d_model), 3)
+        self.attention = None
+        self.dropout = nn.Dropout(p=dropout)
+        self.proj = nn.Sequential(nn.Flatten(),
+                                  nn.Linear(n_col * d_model, input_dim),
+                                  nn.ReLU())
+
+    # def shape(self, x):
+    #     # x: [batch_size, d_model], torch.Size([500, 743])
+    #     # batch_size
+    #     nbatches = x.size(0)
+    #
+    #     # tgt: [batch_size, new_d_model], torch.Size([500, 768])
+    #     tgt = torch.zeros(nbatches, self.new_d_model).to(x.device)
+    #     tgt[:, :self.d_model] = x
+    #     return tgt
+    #
+    # def unshape(self, x):
+    #     return x[:, :self.d_model]
+
+    def forward(self, _input, mask=None):
+        # _input: [batch_size, d_model], torch.Size([500, 743])
+        # batch_size, 500
+        nbatches = _input.size(0)
+
+        # query: [batch_size, new_d_model], torch.Size([500, 768])
+        query = _input.unsqueeze(-1)
+        key = _input.unsqueeze(-1)
+        value = _input.unsqueeze(-1)
+
+        if mask is not None:
+            # Same mask applied to all h heads.
+            mask = mask.unsqueeze(1)
+
+        # 1) Do individual linear projection on query, key, value
+        # in batch from d_model => h x d_k,
+        # query = linear_fn(query)
+        # key = linear_fn(key)
+        # value = linear_fn(value)
+        # shape: torch.Size([batch_size, h, n_col, d_k]), torch.Size([500, 2, 24, 16])
+        query, key, value = [ln(x).view(nbatches, -1, self.h, self.d_k).transpose(1, 2)
+                             for ln, x in zip(self.conv1D, (query, key, value))]
+
+        # 2) Apply attention on all the projected vectors in batch.
+        # x: [batch_size, h, n_col, d_k], torch.Size([500, 2, 24, 16])
+        # self.attention: [batch_size, h, n_col, n_col], torch.Size([500, 2, 24, 24])
+        x, self.attention = attention(query, key, value, mask=mask, dropout=self.dropout)
+
+        # 3) "Concat" using a view and apply a final linear.
+        # x: [batch_size, new_d_model], torch.Size([500, 768])
+        x = x.transpose(1, 2).contiguous().view(nbatches, -1, self.h * self.d_k)
+
+        # output: [batch_size, d_model], e.g. torch.Size([500, 743])
+        output = self.proj(x)
+        return output
+
+
+class FeedForward(nn.Module):
+    """ A two-layer Feed-Forward-Network with residual layer norm.
+
+    Args:
+        input_dim (int): the size of input for the first-layer of the FFN.
+        d_ff (int): the hidden layer size of the second-layer
+            of the FNN.
+        dropout (float): dropout probability in :math:`[0, 1)`.
+        output_dim (int): the size of input for the first-layer of the FFN.
+    """
+
+    def __init__(self, input_dim, d_ff, output_dim, dropout=0.1, residual=False):
+        super(FeedForward, self).__init__()
+        self.layer_norm = LayerNorm(input_dim, epsilon=1e-6)
+        self.w_1 = nn.Linear(input_dim, d_ff)
+        self.w_2 = nn.Linear(d_ff, output_dim)
+        self.dropout_1 = nn.Dropout(dropout)
+        self.relu = nn.ReLU()
+        self.dropout_2 = nn.Dropout(dropout)
+
+        self.residual = True if (input_dim == output_dim) and residual else False
+
+    def forward(self, x):
+        """Layer definition.
+
+        Args:
+            x: ``(batch_size, input_len, model_dim)``
+
+        Returns:
+            (FloatTensor): Output ``(batch_size, input_len, model_dim)``.
+        """
+
+        inter = self.dropout_1(self.relu(self.w_1(self.layer_norm(x))))
+        output = self.dropout_2(self.w_2(inter))
+
+        if self.residual:
+            return output + x
+        else:
+            return output

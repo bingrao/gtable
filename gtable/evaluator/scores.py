@@ -118,7 +118,10 @@ class F1Scorer(Scorer):
         super(F1Scorer, self).__init__("f1_score")
 
     def score(self, y_true: np.ndarray, y_pred: np.ndarray):
-        return f1_score(y_true, y_pred, average="micro")
+        if np.unique(y_true).size <= 2:
+            return f1_score(y_true, y_pred, average="binary")
+        else:
+            return f1_score(y_true, y_pred, average="micro")
 
 
 @register_scorer(name="accuracy")

@@ -46,6 +46,9 @@ def config_opts(parser):
     group.add('--seed', '-seed', type=int, default=1337,
               help='The seed for random function')
 
+    group.add_argument('-i', '--iterations', type=int, default=3,
+                       help='Number of iterations.')
+
     dataset_opts(parser)
 
 
@@ -333,7 +336,8 @@ def evaluate_opts(parser):
     group = parser.add_argument_group('Evaluation')
 
     group.add('--classify_tasks', '-classify_tasks', type=str, nargs='+', default=None,
-              choices=['logistic_regression', 'random_forest', 'decision_tree', 'mlp', 'xgboost'],
+              choices=['logistic_regression', 'random_forest',
+                       'decision_tree', 'mlp', 'xgboost', 'adaboost'],
               help="The valid classification task to evaluate the performance "
                    "of synthetic and original datasets")
 

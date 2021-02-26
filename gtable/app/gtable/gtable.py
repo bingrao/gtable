@@ -56,11 +56,6 @@ class GTABLESynthesizer(BaseSynthesizer):
                 self.data_dim, 1, self.num_columns,
                 self.config, self.transformer.metadata).to(self.device)
 
-        self.logging.info(f"********************** Genertor ***************************:"
-                          f"\n{self.generator}")
-        self.logging.info(f"******************** Discriminator *************************:"
-                          f"\n{self.discriminator}")
-
         self.config.learning_rate_decay = 1e-6
         self.optimizerG = build_torch_optimizer(self.generator, self.config)
 
@@ -139,7 +134,7 @@ class GTABLESynthesizer(BaseSynthesizer):
             real_cat = torch.cat([real, c2], dim=1)
         else:
             real_cat = real
-            fake_cat = fake
+            fake_cat = fakeact
 
         # 3. Sample noise and generate fake data
         y_real = self.discriminator(real_cat)
@@ -248,16 +243,16 @@ class GTABLESynthesizer(BaseSynthesizer):
         for epoch in range(self.config.epochs):
             bar = pbar(self.num_samples, self.config.batch_size, epoch, self.config.epochs)
             for step in range(steps_per_epoch):
-                if self.condition_generator:
-                    loss_g = self.conditional_generator_train_step()
-                else:
-                    loss_g = self.generator_train_step()
-
                 for _ in range(self.config.n_critic):
                     if self.condition_generator:
                         loss_d = self.conditional_discriminator_train_step()
                     else:
                         loss_d = self.discriminator_train_step()
+
+                if self.condition_generator:
+                    loss_g = self.conditional_generator_train_step()
+                else:
+                    loss_g = self.generator_train_step()
 
                 bar.postfix['g_loss'] = f'{loss_g.detach().cpu():6.3f}'
                 bar.postfix['d_loss'] = f'{loss_d.detach().cpu():6.3f}'
@@ -400,6 +395,11 @@ class GTABLESynthesizer(BaseSynthesizer):
         self.logging.info(f"Transforming Training Dataset into "
                           f"numpy array: ({self.num_samples}, {self.data_dim})")
         self.build_model()
+
+        # self.logging.info(f"********************** Genertor ***************************:"
+        #                   f"\n{self.generator}")
+        # self.logging.info(f"******************** Discriminator *************************:"
+        #                   f"\n{self.discriminator}")
 
         self.train()
 

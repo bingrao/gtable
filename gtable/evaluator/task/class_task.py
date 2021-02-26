@@ -15,7 +15,7 @@
 
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.neural_network import MLPClassifier
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
 from sklearn.linear_model import LogisticRegression
 from gtable.evaluator.scores import get_score
 from gtable.utils.misc import ClassRegistry
@@ -34,10 +34,10 @@ class LogisticRegressionTask(BaseTask):
         super(LogisticRegressionTask, self).__init__("logistic_regression", ctx)
 
     def build_model(self):
-        return LogisticRegression(multi_class='auto',
-                                  solver='lbfgs',
-                                  max_iter=500,
-                                  random_state=42)
+        return LogisticRegression(solver='lbfgs',
+                                  n_jobs=2,
+                                  class_weight='balanced',
+                                  max_iter=50)
 
 
 @register_class_task(name="random_forest")
@@ -55,7 +55,8 @@ class DecisionTreeClassifierTask(BaseTask):
         super(DecisionTreeClassifierTask, self).__init__("decision_tree", ctx)
 
     def build_model(self):
-        return DecisionTreeClassifier(random_state=42)
+        return DecisionTreeClassifier(max_depth=20,
+                                      class_weight='balanced')
 
 
 @register_class_task(name="mlp")
@@ -64,10 +65,17 @@ class MLPClassifierTask(BaseTask):
         super(MLPClassifierTask, self).__init__("mlp", ctx)
 
     def build_model(self):
-        return MLPClassifier([50, 50], solver='adam',
-                             activation='relu',
-                             learning_rate='adaptive',
-                             random_state=42)
+        return MLPClassifier(hidden_layer_sizes=(50, ),
+                             max_iter=50)
+
+
+@register_class_task(name="adaboost")
+class ADBBoostClassifierTask(BaseTask):
+    def __init__(self, ctx):
+        super(ADBBoostClassifierTask, self).__init__("adaboost", ctx)
+
+    def build_model(self):
+        return AdaBoostClassifier(n_estimators=50)
 
 
 @register_class_task(name="xgboost")
@@ -116,7 +124,7 @@ class ClassEvaluator(BasedEvaluator):
     def build_estimators(self):
         return make_evaluate_class_tasks(self.context)
 
-    def run(self) -> float:
+    def run(self):
 
         self.logging.info("Build evaluating datasets ...")
         self.build_datasets()
@@ -127,11 +135,9 @@ class ClassEvaluator(BasedEvaluator):
         self.logging.info("Getting estimator scores ...")
         estimators_scores = self.score_estimators()
 
-        self.logging.info(f'Metrics score of Classifier tasks:\n{estimators_scores.to_string()}\n')
-
         score_names = [score.name for score in self.scores]
         mape_scores = [get_score("mape").score(estimators_scores[f'{name}_real'],
                                                estimators_scores[f'{name}_fake'])
                        for name in score_names]
 
-        return 1 - statistics.mean(mape_scores)
+        return estimators_scores, 1 - statistics.mean(mape_scores)
