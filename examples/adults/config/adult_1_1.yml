@@ -7,8 +7,8 @@ generation:
   data_type: "numpy"
 
   save_checkpoints_steps: 1000
-  epochs: 10
-  iterations: 1
+  epochs: 1
+  iterations: 2
   cuda_visible_devices: 1
   g_penalty: 3.0
   n_critic: 5

@@ -182,26 +182,14 @@ def make_leaderboard(scores, add_leaderboard=False, leaderboard_path=None,
         ]
 
     scores = pd.concat(scores, ignore_index=True)
-    scores = scores.drop(['iteration', 'name'], axis=1, errors='ignore')
 
-    leaderboard = scores.groupby(['synthesizer', 'dataset']).apply(_dataset_summary)
-    if isinstance(leaderboard, pd.Series):
-        leaderboard = leaderboard.droplevel(-2).unstack(-1)
-    else:
-        leaderboard = leaderboard.droplevel(-1)
+    scores = scores.drop(['iteration', 'synthesizer'], axis=1, errors='ignore')
+
+    leaderboard = scores.groupby(['name', 'dataset'], as_index=False).mean()
+
+    # leaderboard = scores.groupby(['name', 'dataset']).apply(_dataset_summary)
 
     leaderboard['timestamp'] = datetime.utcnow()
-
-    if add_leaderboard:
-        old_leaderboard = pd.read_csv(
-            leaderboard_path or LEADERBOARD_PATH,
-            index_col=0,
-            parse_dates=['timestamp']
-        ).reindex(columns=leaderboard.columns)
-        if replace_existing:
-            old_leaderboard.drop(labels=leaderboard.index, errors='ignore', inplace=True)
-
-        leaderboard = old_leaderboard.append(leaderboard, sort=False)
 
     if output_path:
         os.makedirs(os.path.dirname(os.path.realpath(output_path)), exist_ok=True)

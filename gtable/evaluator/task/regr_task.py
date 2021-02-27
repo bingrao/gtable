@@ -27,55 +27,55 @@ register_evaluate_regr_task = _EVALUATE_REGR_TASK_REGISTRY.register  # pylint: d
 
 @register_evaluate_regr_task(name="random_forest_regr")
 class RandomForestRegressorTask(BaseTask):
-    def __init__(self, ctx):
-        super(RandomForestRegressorTask, self).__init__("random_forest_regr", ctx)
+    def __init__(self, ctx, task_type):
+        super(RandomForestRegressorTask, self).__init__("random_forest_regr", ctx, task_type)
 
     def build_model(self):
-        return RandomForestRegressor(n_estimators=20, max_depth=5, random_state=42)
+        return RandomForestRegressor(**self.model_kwargs)
 
 
 @register_evaluate_regr_task(name="lasso")
 class LassoRegressorTask(BaseTask):
-    def __init__(self, ctx):
-        super(LassoRegressorTask, self).__init__("lasso", ctx)
+    def __init__(self, ctx, task_type):
+        super(LassoRegressorTask, self).__init__("lasso", ctx, task_type)
 
     def build_model(self):
-        return Lasso(random_state=42)
+        return Lasso(**self.model_kwargs)
 
 
 @register_evaluate_regr_task(name="ridge")
 class RidgeRegressorTask(BaseTask):
-    def __init__(self, ctx):
-        super(RidgeRegressorTask, self).__init__("ridge", ctx)
+    def __init__(self, ctx, task_type):
+        super(RidgeRegressorTask, self).__init__("ridge", ctx, task_type)
 
     def build_model(self):
-        return Ridge(alpha=1.0, random_state=42)
+        return Ridge(**self.model_kwargs)
 
 
 @register_evaluate_regr_task(name="elastic_net")
 class ElasticNetRegressorTask(BaseTask):
-    def __init__(self, ctx):
-        super(ElasticNetRegressorTask, self).__init__("elastic_net", ctx)
+    def __init__(self, ctx, task_type):
+        super(ElasticNetRegressorTask, self).__init__("elastic_net", ctx, task_type)
 
     def build_model(self):
-        return ElasticNet(random_state=42)
+        return ElasticNet(**self.model_kwargs)
 
 
-def make_evaluate_regr_tasks(ctx):
+def make_evaluate_regr_tasks(ctx, task_type):
     names = ctx.config.regression_tasks
     if names is None:
         return []
 
     if not isinstance(names, list):
         names = [names]
-    return [get_evaluate_regr_task(name, ctx) for name in names]
+    return [get_evaluate_regr_task(name, ctx, task_type) for name in names]
 
 
-def get_evaluate_regr_task(name, ctx):
+def get_evaluate_regr_task(name, ctx, task_type):
     task_class = _EVALUATE_REGR_TASK_REGISTRY.get(name.lower())
     if task_class is None:
         raise ValueError("No scorer associated with the name: {}".format(name))
-    return task_class(ctx)
+    return task_class(ctx, task_type)
 
 
 class RegrEvaluator(BasedEvaluator):
@@ -94,7 +94,7 @@ class RegrEvaluator(BasedEvaluator):
                                             validType="regressor")
 
     def build_estimators(self):
-        return make_evaluate_regr_tasks(self.context)
+        return make_evaluate_regr_tasks(self.context, self.metadata['problem_type'])
 
     def run(self):
         self.build_datasets()

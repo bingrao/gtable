@@ -387,15 +387,12 @@ class DataEvaluator:
         column_correlations = get_score("column_correlations")
         return column_correlations(self.real, self.fake, self.categorial_cols)
 
-    def run(self, iteration=0, scores_metrics=None):
+    def run(self, iteration=0):
         """
         Determine correlation between attributes from the real
         and fake dataset using a given metric.
         All metrics from scipy.stats are available.
         """
-
-        if scores_metrics is None:
-            scores_metrics = {}
 
         for task in self.visual:
             self.logging.info(f"Plot {task} ...")
@@ -418,19 +415,20 @@ class DataEvaluator:
             'MAPE_PCA': self.pca_correlation(),
         }
 
-        estimators_scores, eval_score = self.evaluator.run()
-        b = estimators_scores[['name', 'accuracy_real', 'f1_score_real']]
-        b.columns = scores_metrics.columns
-        scores_metrics = scores_metrics.append(b)
+        scores_metrics, eval_score = self.evaluator.run()
+
+        # b = estimators_scores[['name', 'accuracy_real', 'f1_score_real']]
+        # b.columns = scores_metrics.columns
+        # scores_metrics = scores_metrics.append(b)
 
         if self.is_class_evaluator:
             self.logging.info(
-                f'Metrics score of Classifier tasks:\n{estimators_scores.to_string()}\n')
+                f'Metrics score of Classifier tasks:\n{scores_metrics.to_string()}\n')
             all_results.update({"MAPE_Class": eval_score})
 
         if self.is_regr_evaluator:
             self.logging.info(
-                f'Metrics score of Regressor tasks:\n {estimators_scores.to_string()}\n')
+                f'Metrics score of Regressor tasks:\n {scores_metrics.to_string()}\n')
             all_results.update({"RMSE_Regr": eval_score})
 
         all_results['Similarity_Score'] = np.mean(list(all_results.values()))

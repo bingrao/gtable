@@ -46,7 +46,7 @@ def main():
 
     lb = make_leaderboard(scores, output_path=os.path.join(ctx.output,
                                                            f"{ctx.real_name}-"
-                                                           f"{ctx.app}-"
+                                                           f"{ctx.app.lower()}-"
                                                            f"{ctx.config_file_name}-"
                                                            f"leaderboard.csv"))
     if lb is not None:

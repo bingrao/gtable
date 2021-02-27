@@ -22,14 +22,16 @@ import pandas as pd
 import numpy as np
 from gtable.data.inputter import category_to_number
 from gtable.utils.constants import NUMERICAL, CATEGORICAL, ORDINAL
+from gtable.evaluator.task import _MODELS
 
 
 class BaseTask(abc.ABC):
-    def __init__(self, name, ctx):
+    def __init__(self, name, ctx, task_type='binary_classification'):
         self._name = name
         self.context = ctx
         self.config = ctx.config
         self.logging = ctx.logger
+        self.model_kwargs = _MODELS[task_type][name]
         self.model = self.build_model()
 
     def build_model(self):
@@ -93,6 +95,8 @@ class BasedEvaluator:
                              if item['type'] == ORDINAL]
 
         self.random_seed = seed
+
+        self.target_col = None
 
         self.estimators = self.build_estimators()
 
@@ -171,66 +175,6 @@ class BasedEvaluator:
         for i, c in enumerate(self.fake_estimators):
             self.logging.info(f'Fitting fake: {i + 1}: {type(c).__name__}')
             c.fit(self.fake_x_train, self.fake_y_train)
-
-    # def score_estimators(self):
-    #     """
-    #     Get F1 scores of self.real_estimators and self.fake_estimators
-    #     on the fake and real data, respectively.
-    #
-    #     :return: dataframe with the results for each estimator on each data test set.
-    #     """
-    #     rows = []
-    #     for real_estimator, fake_estimator, estimator_name in \
-    #             zip(self.real_estimators, self.fake_estimators, self.estimator_names):
-    #         for dataset, target, dataset_name in zip([self.real_x_test, self.fake_x_test],
-    #                                                  [self.real_y_test, self.fake_y_test],
-    #                                                  ['real', 'fake']):
-    #             predict_real = real_estimator.predict(dataset)
-    #             predict_fake = fake_estimator.predict(dataset)
-    #             row = {'name': f'{estimator_name}_{dataset_name}'}
-    #             for score in self.scores:
-    #                 row.update(score(target, predict_real, "real"))
-    #                 row.update(score(target, predict_fake, "fake"))
-    #
-    #             if self.validType == "classifer":
-    #                 jac_sim = get_score("jaccard_similarity").score(predict_real, predict_fake)
-    #                 row.update({'jaccard_similarity': jac_sim})
-    #
-    #             rows.append(row)
-    #     output = pd.DataFrame(rows)
-    #     return output
-
-    # def score_estimators(self):
-    #     """
-    #     Get F1 scores of self.real_estimators and self.fake_estimators
-    #     on the fake and real data, respectively.
-    #
-    #     :return: dataframe with the results for each estimator on each data test set.
-    #     """
-    #     rows = []
-    #     for real_estimator, estimator_name in zip(self.real_estimators, self.estimator_names):
-    #         row = {'name': f'{estimator_name}_real'}
-    #         for dataset, target, dataset_name in zip([self.real_x_test, self.fake_x_test],
-    #                                                  [self.real_y_test, self.fake_y_test],
-    #                                                  ['real', 'fake']):
-    #             predict_real = real_estimator.predict(dataset)
-    #             for score in self.scores:
-    #                 row.update(score(target, predict_real, dataset_name))
-    #         rows.append(row)
-    #
-    #     for fake_estimator, estimator_name in zip(self.fake_estimators, self.estimator_names):
-    #         row = {'name': f'{estimator_name}_fake'}
-    #         for dataset, target, dataset_name in zip([self.real_x_test, self.fake_x_test],
-    #                                                  [self.real_y_test, self.fake_y_test],
-    #                                                  ['real', 'fake']):
-    #             predict_fake = fake_estimator.predict(dataset)
-    #             for score in self.scores:
-    #                 row.update(score(target, predict_fake, dataset_name))
-    #
-    #         rows.append(row)
-    #
-    #     output = pd.DataFrame(rows)
-    #     return output
 
     def score_estimators(self):
         """

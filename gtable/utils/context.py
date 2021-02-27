@@ -74,7 +74,7 @@ class Context:
                                     self.output,
                                     'logs',
                                     f'{self.run_type}-{date.today()}-'
-                                    f'{self.app}-'
+                                    f'{self.app.lower()}-'
                                     f'{self.config_file_name}-log.txt')
 
         if not exists(self.project_log):

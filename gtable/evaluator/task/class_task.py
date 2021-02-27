@@ -30,80 +30,73 @@ register_class_task = _EVALUATE_ClASS_TASK_REGISTRY.register  # pylint: disable=
 
 @register_class_task(name="logistic_regression")
 class LogisticRegressionTask(BaseTask):
-    def __init__(self, ctx):
-        super(LogisticRegressionTask, self).__init__("logistic_regression", ctx)
+    def __init__(self, ctx, task_type):
+        super(LogisticRegressionTask, self).__init__("logistic_regression", ctx, task_type)
 
     def build_model(self):
-        return LogisticRegression(solver='lbfgs',
-                                  n_jobs=2,
-                                  class_weight='balanced',
-                                  max_iter=50)
+        return LogisticRegression(**self.model_kwargs)
 
 
 @register_class_task(name="random_forest")
 class RandomForestClassifierTask(BaseTask):
-    def __init__(self, ctx):
-        super(RandomForestClassifierTask, self).__init__("random_forest", ctx)
+    def __init__(self, ctx, task_type):
+        super(RandomForestClassifierTask, self).__init__("random_forest", ctx, task_type)
 
     def build_model(self):
-        return RandomForestClassifier(n_estimators=10, random_state=42)
+        return RandomForestClassifier(**self.model_kwargs)
 
 
 @register_class_task(name="decision_tree")
 class DecisionTreeClassifierTask(BaseTask):
-    def __init__(self, ctx):
-        super(DecisionTreeClassifierTask, self).__init__("decision_tree", ctx)
+    def __init__(self, ctx, task_type):
+        super(DecisionTreeClassifierTask, self).__init__("decision_tree", ctx, task_type)
 
     def build_model(self):
-        return DecisionTreeClassifier(max_depth=20,
-                                      class_weight='balanced')
+        return DecisionTreeClassifier(**self.model_kwargs)
 
 
 @register_class_task(name="mlp")
 class MLPClassifierTask(BaseTask):
-    def __init__(self, ctx):
-        super(MLPClassifierTask, self).__init__("mlp", ctx)
+    def __init__(self, ctx, task_type):
+        super(MLPClassifierTask, self).__init__("mlp", ctx, task_type)
 
     def build_model(self):
-        return MLPClassifier(hidden_layer_sizes=(50, ),
-                             max_iter=50)
+        return MLPClassifier(**self.model_kwargs)
 
 
 @register_class_task(name="adaboost")
 class ADBBoostClassifierTask(BaseTask):
-    def __init__(self, ctx):
-        super(ADBBoostClassifierTask, self).__init__("adaboost", ctx)
+    def __init__(self, ctx, task_type):
+        super(ADBBoostClassifierTask, self).__init__("adaboost", ctx, task_type)
 
     def build_model(self):
-        return AdaBoostClassifier(n_estimators=50)
+        return AdaBoostClassifier(**self.model_kwargs)
 
 
 @register_class_task(name="xgboost")
 class XGBoostTask(BaseTask):
-    def __init__(self, ctx):
-        self.context = ctx
-        super(XGBoostTask, self).__init__("xgboost", ctx)
+    def __init__(self, ctx, task_type):
+        super(XGBoostTask, self).__init__("xgboost", ctx, task_type)
 
     def build_model(self):
         return XGBClassifier()
 
 
-def make_evaluate_class_tasks(ctx):
+def make_evaluate_class_tasks(ctx, task_type):
     names = ctx.config.classify_tasks
-
     if names is None:
         return []
 
     if not isinstance(names, list):
         names = [names]
-    return [get_evaluate_class_task(name, ctx) for name in names]
+    return [get_evaluate_class_task(name, ctx, task_type) for name in names]
 
 
-def get_evaluate_class_task(name, ctx):
+def get_evaluate_class_task(name, ctx, task_type):
     task_class = _EVALUATE_ClASS_TASK_REGISTRY.get(name.lower())
     if task_class is None:
         raise ValueError("No scorer associated with the name: {}".format(name))
-    return task_class(ctx)
+    return task_class(ctx, task_type)
 
 
 class ClassEvaluator(BasedEvaluator):
@@ -122,10 +115,10 @@ class ClassEvaluator(BasedEvaluator):
                                              validType="classifer")
 
     def build_estimators(self):
-        return make_evaluate_class_tasks(self.context)
+        return make_evaluate_class_tasks(self.context,
+                                         self.metadata['problem_type'])
 
     def run(self):
-
         self.logging.info("Build evaluating datasets ...")
         self.build_datasets()
 

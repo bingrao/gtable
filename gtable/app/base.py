@@ -65,9 +65,9 @@ class BaseSynthesizer:
     def from_contex(cls, ctx):
         return cls(ctx)
 
-    def evaluate(self, real_dataset, fake_dataset, iteration=0, scores=None):
+    def evaluate(self, real_dataset, fake_dataset, iteration=0):
         evaluator = DataEvaluator(self.context, real_dataset, fake_dataset)
-        return evaluator.run(iteration, scores)
+        return evaluator.run(iteration)
 
     def _apply_activate(self, data):
         assert self.transformer is not None
@@ -89,7 +89,6 @@ class BaseSynthesizer:
 
     def __call__(self, dataset, iteration=0):
         self.logging.info(f"Fitting and training {self.__class__.__name__}")
-
         self.fit(dataset)
 
         self.logging.info(f"Sampling {self.__class__.__name__}")
@@ -117,16 +116,13 @@ class BaseSynthesizer:
 
         self.logging.info(f"Evaluation {self.__class__.__name__}")
 
-        scores = compute_scores(dataset, fake_dataset)
+        # scores = compute_scores(dataset, fake_dataset)
 
-        scores = self.evaluate(dataset, fake_dataset, iteration, scores)
+        scores = self.evaluate(dataset, fake_dataset, iteration)
 
         scores['iteration'] = iteration
         scores['synthesizer'] = self.context.app
         scores['dataset'] = self.context.real_name
-
-        self.logging.info(f"Evaluation Score: "
-                          f"\n {scores[['iteration', 'synthesizer', 'dataset', 'name', 'accuracy', 'f1']]}")
 
         self.logging.info(f"##################### [{iteration}] Over #####################")
 
