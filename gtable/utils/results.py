@@ -194,8 +194,8 @@ def make_leaderboard(scores, add_leaderboard=False, leaderboard_path=None,
     if output_path:
         os.makedirs(os.path.dirname(os.path.realpath(output_path)), exist_ok=True)
         leaderboard.to_csv(output_path)
-    else:
-        return leaderboard
+
+    return leaderboard
 
 
 if __name__ == '__main__':

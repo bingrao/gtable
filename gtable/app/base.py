@@ -17,15 +17,17 @@ import torch
 from gtable.data.dataset import get_data_loader
 from gtable.evaluator import DataEvaluator
 from torch.nn import functional
-from gtable.utils.evaluate import compute_scores
+from gtable.utils.constants import NUMERICAL
 import numpy as np
 import os
+import pandas as pd
 
 
 class BaseSynthesizer:
     """
     Base class for all default app.
     """
+
     def __init__(self, ctx):
         self.context = ctx
         self.logging = self.context.logger
@@ -87,6 +89,26 @@ class BaseSynthesizer:
 
         return torch.cat(data_t, dim=1)
 
+    def toDataFrame(self, data, columns_name, iteration=0, output_name=None):
+        output = pd.DataFrame(data, columns=columns_name)
+        for attr in self.transformer.metadata['columns']:
+            if attr['type'] == NUMERICAL:
+                output[attr['name']] = output[attr['name']].astype('int32')
+            else:
+                index = attr['i2s']
+                output[attr['name']] = output[attr['name']].apply(lambda x: index[int(x)])
+                output[attr['name']] = output[attr['name']].astype('string')
+
+        if output_name:
+            output.to_csv(os.path.join(self.config.output,
+                                       f"{output_name}_{self.context.real_name}-"
+                                       f"{self.context.app.lower()}-"
+                                       f"{self.context.config_file_name}-"
+                                       f"{iteration}.csv"),
+                          index=False, sep=',')
+
+        return output
+
     def __call__(self, dataset, iteration=0):
         self.logging.info(f"Fitting and training {self.__class__.__name__}")
         self.fit(dataset)
@@ -96,20 +118,20 @@ class BaseSynthesizer:
         fake_test = self.sample(dataset.num_test_dataset)
 
         if self.config.output:
-            output_path = os.path.join(self.config.output,
-                                       f"fake_{self.context.real_name}-"
-                                       f"{self.context.app.lower()}-"
-                                       f"{self.context.config_file_name}-"
-                                       f"{iteration}.{self.context.real_ext}")
+            self.toDataFrame(fake_train, dataset.name_columns, iteration, "fake_train")
+            self.toDataFrame(fake_test, dataset.name_columns, iteration, "fake_test")
+
             if self.context.real_ext == "npz":
-                np.savez(output_path,
+                np.savez(os.path.join(self.config.output,
+                                      f"fake_{self.context.real_name}-"
+                                      f"{self.context.app.lower()}-"
+                                      f"{self.context.config_file_name}-"
+                                      f"{iteration}.{self.context.real_ext}"),
                          train=fake_train,
                          test=fake_test,
                          metadata=self.transformer.metadata)
-            elif self.context.real_ext == "csv":
-                pass
-            else:
-                pass
+                self.toDataFrame(dataset.train_dataset, dataset.name_columns, iteration, "real_train")
+                self.toDataFrame(dataset.test_dataset, dataset.name_columns, iteration, "real_test")
 
         fake_dataset = get_data_loader(self.context, "fake")((fake_train, fake_test),
                                                              dataset.metadata)

@@ -22,6 +22,7 @@ from gtable.utils import Context
 from gtable.utils.results import make_leaderboard
 import os
 
+
 def _get_parser():
     parser = ArgumentParser(run_type="generation", description='generation.py')
     opts.config_opts(parser)
@@ -49,8 +50,8 @@ def main():
                                                            f"{ctx.app.lower()}-"
                                                            f"{ctx.config_file_name}-"
                                                            f"leaderboard.csv"))
-    if lb is not None:
-        print(lb)
+    ctx.logger.info(f"The average evaluate metrics: \n"
+                    f"{lb['accuracy_real', 'accuracy_fake', 'f1_score_real', 'f1_score_fake']}")
 
 
 if __name__ == "__main__":

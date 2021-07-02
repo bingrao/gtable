@@ -264,7 +264,7 @@ def runtime_opts(parser):
     group.add('--sample_dir', '-sample_dir', type=str, default="samples",
               help="Directory name to save the image samples [samples]")
 
-    parser.add_argument('--device', '-device', type=str, choices=['cuda', 'cpu'],
+    group.add_argument('--device', '-device', type=str, choices=['cuda', 'cpu'],
                         default='cuda' if torch.cuda.is_available() else 'cpu')
 
     group.add('--cuda_visible_devices', '-cuda_visible_devices', type=int, nargs='*',
@@ -279,7 +279,6 @@ def runtime_opts(parser):
 
 def train_opts(parser):
     """ Training and saving options """
-
     group = parser.add_argument_group('Traning')
 
     # group.add('--train', '-train', type=str, default='VGAN',
