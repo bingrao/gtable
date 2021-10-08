@@ -1,4 +1,4 @@
-name: gan-table
+name: gtable
 channels:
   - anaconda
   - pytorch
@@ -95,4 +95,4 @@ dependencies:
     - text-unidecode==1.3
     - tqdm==4.54.1
     - xgboost==1.3.0.post0
-prefix: /home/forcebot/.local/opt/miniconda3/envs/gan-table
+prefix: /home/forcebot/.local/opt/miniconda3/envs/gtable
